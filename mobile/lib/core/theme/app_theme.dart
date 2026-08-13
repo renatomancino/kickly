@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const primary = Color(0xFF75E36B);
+  // Same visual tokens used by src/app/globals.css in the PWA.
+  static const primary = Color(0xFFC7FF3D);
   static const background = Color(0xFF0B0D0C);
-  static const surface = Color(0xFF141715);
-  static const surfaceHigh = Color(0xFF1C211E);
-  static const outline = Color(0xFF2B312D);
+  static const surface = Color(0xFF181C19);
+  static const surfaceHigh = Color(0xFF222722);
+  static const outline = Color(0xFF303630);
 
   static ThemeData get dark {
     const colors = ColorScheme.dark(
@@ -30,24 +31,50 @@ class AppTheme {
       colorScheme: colors,
       scaffoldBackgroundColor: background,
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
+    );
+
+    final readableText = base.textTheme.apply(
+      bodyColor: colors.onSurface,
+      displayColor: colors.onSurface,
     );
 
     return base.copyWith(
-      textTheme: base.textTheme.copyWith(
+      textTheme: readableText.copyWith(
         headlineLarge: const TextStyle(
-          fontSize: 34,
+          color: Color(0xFFF3F6F3),
+          fontSize: 36,
           fontWeight: FontWeight.w900,
           letterSpacing: -1.2,
         ),
         headlineMedium: const TextStyle(
+          color: Color(0xFFF3F6F3),
           fontSize: 28,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.8,
         ),
-        titleLarge: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
-        titleMedium: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        bodyMedium: const TextStyle(fontSize: 14, height: 1.45),
-        labelLarge: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        titleLarge: const TextStyle(
+          color: Color(0xFFF3F6F3),
+          fontSize: 21,
+          fontWeight: FontWeight.w800,
+        ),
+        titleMedium: const TextStyle(
+          color: Color(0xFFF3F6F3),
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+        bodyLarge: const TextStyle(color: Color(0xFFF3F6F3)),
+        bodyMedium: const TextStyle(
+          color: Color(0xFFF3F6F3),
+          fontSize: 14,
+          height: 1.45,
+        ),
+        bodySmall: const TextStyle(color: Color(0xFF9EA59E)),
+        labelLarge: const TextStyle(
+          color: Color(0xFFF3F6F3),
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+        ),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -61,7 +88,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           side: const BorderSide(color: outline),
         ),
       ),
@@ -106,12 +133,23 @@ class AppTheme {
       chipTheme: base.chipTheme.copyWith(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         side: const BorderSide(color: outline),
-        labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+        labelStyle: const TextStyle(
+          color: Color(0xFFD7DDD7),
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
       navigationBarTheme: const NavigationBarThemeData(
-        backgroundColor: Color(0xF5141715),
-        indicatorColor: Color(0x2975E36B),
-        height: 72,
+        backgroundColor: Color(0xFA0B0D0C),
+        indicatorColor: Colors.transparent,
+        height: 66,
+      ),
+      tabBarTheme: const TabBarThemeData(
+        labelColor: primary,
+        unselectedLabelColor: Color(0xFF9EA59E),
+        indicatorColor: primary,
+        dividerColor: outline,
+        labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: surfaceHigh,

@@ -46,6 +46,11 @@ class KicklyRepository {
 
   Future<void> signOut() async => client?.auth.signOut();
 
+  Future<void> updatePassword(String password) async {
+    if (isDemo) return;
+    await client!.auth.updateUser(UserAttributes(password: password));
+  }
+
   Future<UserProfile?> getCurrentProfile() async {
     if (isDemo) return demoProfile;
     final userId = currentUserId;
@@ -54,7 +59,8 @@ class KicklyRepository {
         .from('profiles')
         .select(
           'id, username, first_name, last_name, avatar_path, primary_position, '
-          'skill_level, overall, timezone, onboarding_completed',
+          'secondary_position, preferred_foot, skill_level, birth_date, city, '
+          'profile_public, overall, timezone, onboarding_completed',
         )
         .eq('id', userId)
         .maybeSingle();
@@ -68,6 +74,11 @@ class KicklyRepository {
     required String lastName,
     required String primaryPosition,
     required String skillLevel,
+    String? birthDate,
+    String? city,
+    String? secondaryPosition,
+    String? preferredFoot,
+    bool profilePublic = true,
     Uint8List? avatarBytes,
     String? avatarExtension,
   }) async {
@@ -77,7 +88,10 @@ class KicklyRepository {
 
     String? avatarPath;
     if (avatarBytes != null) {
-      final extension = avatarExtension?.toLowerCase() == 'png' ? 'png' : 'jpg';
+      final requested = avatarExtension?.toLowerCase();
+      final extension = ['png', 'webp'].contains(requested)
+          ? requested!
+          : 'jpg';
       avatarPath = '$userId/avatar.$extension';
       await client!.storage
           .from('avatars')
@@ -86,7 +100,11 @@ class KicklyRepository {
             avatarBytes,
             fileOptions: FileOptions(
               upsert: true,
-              contentType: extension == 'png' ? 'image/png' : 'image/jpeg',
+              contentType: extension == 'png'
+                  ? 'image/png'
+                  : extension == 'webp'
+                  ? 'image/webp'
+                  : 'image/jpeg',
             ),
           );
     }
@@ -97,7 +115,12 @@ class KicklyRepository {
       'first_name': firstName.trim(),
       'last_name': lastName.trim(),
       'primary_position': primaryPosition,
+      'secondary_position': secondaryPosition,
+      'preferred_foot': preferredFoot ?? 'right',
       'skill_level': skillLevel,
+      'birth_date': birthDate?.trim().isEmpty == true ? null : birthDate,
+      'city': city?.trim() ?? '',
+      'profile_public': profilePublic,
       'onboarding_completed': true,
     };
     if (avatarPath != null) payload['avatar_path'] = avatarPath;
@@ -189,6 +212,8 @@ class KicklyRepository {
     required String visibility,
     required String footballFormat,
     required int maxMembers,
+    Uint8List? logoBytes,
+    String? logoExtension,
   }) async {
     if (isDemo) return slug;
     final data = await client!.rpc(
@@ -206,7 +231,84 @@ class KicklyRepository {
     );
     final rows = data as List<dynamic>? ?? const [];
     if (rows.isEmpty) throw StateError('Lega non creata.');
-    return (rows.first as Map)['slug'].toString();
+    final created = Map<String, dynamic>.from(rows.first as Map);
+    final createdSlug = created['slug'].toString();
+    if (logoBytes != null) {
+      final id =
+          created['id']?.toString() ??
+          (await getLeague(createdSlug))?.summary.id;
+      if (id != null) await _uploadLeagueLogo(id, logoBytes, logoExtension);
+    }
+    return createdSlug;
+  }
+
+  Future<void> updateLeague({
+    required String id,
+    required String name,
+    required String description,
+    required String city,
+    required String country,
+    required String visibility,
+    required String footballFormat,
+    required int maxMembers,
+    Uint8List? logoBytes,
+    String? logoExtension,
+  }) async {
+    if (isDemo) return;
+    final count = await client!
+        .from('league_members')
+        .count(CountOption.exact)
+        .eq('league_id', id)
+        .eq('status', 'active');
+    if (count > maxMembers) {
+      throw StateError('La lega ha già $count membri attivi.');
+    }
+    final payload = <String, dynamic>{
+      'name': name.trim(),
+      'description': description.trim().isEmpty ? null : description.trim(),
+      'city': city.trim(),
+      'country': country.trim(),
+      'visibility': visibility,
+      'football_format': footballFormat,
+      'max_members': maxMembers,
+    };
+    if (logoBytes != null) {
+      payload['logo_url'] = await _uploadLeagueLogo(
+        id,
+        logoBytes,
+        logoExtension,
+      );
+    }
+    await client!.from('leagues').update(payload).eq('id', id);
+  }
+
+  Future<void> deleteLeague(String id) async {
+    if (!isDemo) await client!.from('leagues').delete().eq('id', id);
+  }
+
+  Future<String> _uploadLeagueLogo(
+    String id,
+    Uint8List bytes,
+    String? extension,
+  ) async {
+    final ext = ['png', 'webp'].contains(extension?.toLowerCase())
+        ? extension!.toLowerCase()
+        : 'jpg';
+    final path = '$id/${DateTime.now().microsecondsSinceEpoch}.$ext';
+    await client!.storage
+        .from('league-logos')
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: ext == 'png'
+                ? 'image/png'
+                : ext == 'webp'
+                ? 'image/webp'
+                : 'image/jpeg',
+          ),
+        );
+    return client!.storage.from('league-logos').getPublicUrl(path);
   }
 
   Future<JsonMap?> getInvitePreview(String code) async {
@@ -240,15 +342,278 @@ class KicklyRepository {
     return result.toString();
   }
 
+  Future<String> joinPublicLeague(String leagueId) async {
+    if (isDemo) return demoLeagues.first.slug;
+    final result = await client!.rpc(
+      'join_public_league',
+      params: {'target_league': leagueId},
+    );
+    return result.toString();
+  }
+
+  Future<List<LeagueCommunication>> getLeagueCommunications(
+    String leagueId,
+  ) async {
+    if (isDemo) {
+      return [
+        LeagueCommunication(
+          id: 'demo-news',
+          matchId: null,
+          createdBy: 'demo-user',
+          kind: 'announcement',
+          title: 'Benvenuti nella lega',
+          body: 'Qui trovi avvisi, convocazioni e aggiornamenti degli admin.',
+          pinned: true,
+          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+          authorName: 'Renato Bianchi',
+          authorUsername: 'renato10',
+        ),
+      ];
+    }
+    final rows = await client!
+        .from('league_communications')
+        .select(
+          'id, match_id, created_by, kind, title, body, pinned, created_at',
+        )
+        .eq('league_id', leagueId)
+        .order('pinned', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(50);
+    final list = (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final authorIds = list
+        .map((e) => e['created_by'].toString())
+        .toSet()
+        .toList();
+    final profileRows = authorIds.isEmpty
+        ? <dynamic>[]
+        : await client!
+              .from('profiles')
+              .select('id, first_name, last_name, username, avatar_path')
+              .inFilter('id', authorIds);
+    final profiles = <String, JsonMap>{
+      for (final raw in profileRows)
+        (raw as Map)['id'].toString(): Map<String, dynamic>.from(raw),
+    };
+    return list.map((row) {
+      final profile =
+          profiles[row['created_by'].toString()] ?? const <String, dynamic>{};
+      final name = [
+        profile['first_name'],
+        profile['last_name'],
+      ].whereType<String>().where((e) => e.isNotEmpty).join(' ');
+      return LeagueCommunication(
+        id: row['id'].toString(),
+        matchId: row['match_id']?.toString(),
+        createdBy: row['created_by'].toString(),
+        kind: row['kind']?.toString() ?? 'announcement',
+        title: row['title']?.toString() ?? '',
+        body: row['body']?.toString() ?? '',
+        pinned: row['pinned'] == true,
+        createdAt: asDate(row['created_at']),
+        authorName: name.isEmpty
+            ? '@${profile['username'] ?? 'giocatore'}'
+            : name,
+        authorUsername: profile['username']?.toString() ?? 'giocatore',
+        authorAvatarUrl: _publicUrl(
+          'avatars',
+          profile['avatar_path']?.toString(),
+        ),
+      );
+    }).toList();
+  }
+
+  Future<void> publishLeagueCommunication(
+    String leagueId, {
+    required String title,
+    required String body,
+    required bool pinned,
+  }) async {
+    if (isDemo) return;
+    await client!.rpc(
+      'publish_league_communication',
+      params: {
+        'target_league': leagueId,
+        'communication_title': title.trim(),
+        'communication_body': body.trim(),
+        'communication_pinned': pinned,
+      },
+    );
+  }
+
+  Future<void> deleteLeagueCommunication(String id) async {
+    if (isDemo) return;
+    await client!.rpc(
+      'delete_league_communication',
+      params: {'target_communication': id},
+    );
+  }
+
+  Future<List<LeaderboardPlayer>> getLeagueLeaderboard(String leagueId) async {
+    if (isDemo) {
+      return demoLeagues.isEmpty
+          ? const []
+          : List.generate(
+              8,
+              (i) => LeaderboardPlayer(
+                userId: 'demo-$i',
+                username: 'player${i + 1}',
+                name: i == 0 ? 'Renato Bianchi' : 'Giocatore ${i + 1}',
+                matches: 20 - i,
+                goals: 14 - i,
+                assists: 9 - (i ~/ 2),
+                mvp: 4 - (i ~/ 2),
+                overall: 82 - i,
+              ),
+            );
+    }
+    final data = await client!.rpc(
+      'get_league_leaderboard_rows',
+      params: {'target_league': leagueId},
+    );
+    return (data as List<dynamic>? ?? const []).map((raw) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final name = [
+        row['first_name'],
+        row['last_name'],
+      ].whereType<String>().join(' ').trim();
+      return LeaderboardPlayer(
+        userId: row['user_id'].toString(),
+        username: row['username']?.toString() ?? 'giocatore',
+        name: name.isEmpty ? '@${row['username'] ?? 'giocatore'}' : name,
+        avatarUrl: _publicUrl('avatars', row['avatar_path']?.toString()),
+        matches: asInt(row['matches_played']),
+        goals: asInt(row['goals']),
+        assists: asInt(row['assists']),
+        mvp: asInt(row['mvp_awards']),
+        overall: asInt(row['overall'], 70),
+      );
+    }).toList();
+  }
+
+  Future<void> setLeagueMemberRole(
+    String leagueId,
+    String userId,
+    String role,
+  ) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'set_league_member_role',
+        params: {
+          'target_league': leagueId,
+          'target_user': userId,
+          'target_role': role,
+        },
+      );
+    }
+  }
+
+  Future<void> removeLeagueMember(String leagueId, String userId) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'remove_league_member',
+        params: {'target_league': leagueId, 'target_user': userId},
+      );
+    }
+  }
+
+  Future<void> transferLeagueOwnership(String leagueId, String userId) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'transfer_league_ownership',
+        params: {'target_league': leagueId, 'target_user': userId},
+      );
+    }
+  }
+
+  Future<void> leaveLeague(String leagueId) async {
+    if (!isDemo) {
+      await client!.rpc('leave_league', params: {'target_league': leagueId});
+    }
+  }
+
+  Future<String> rotateLeagueInvite(String leagueId) async => isDemo
+      ? 'KICKLY8'
+      : (await client!.rpc(
+          'rotate_league_invite_code',
+          params: {'target_league': leagueId},
+        )).toString();
+
   Future<List<MatchSummary>> getMatches() async {
     if (isDemo) return demoMatches;
     final leagues = await getLeagues();
-    final groups = await Future.wait(leagues.map(getLeagueMatches));
-    final seen = <String>{};
-    final matches = groups
-        .expand((group) => group)
-        .where((item) => seen.add(item.id))
+    final rows = await client!
+        .from('matches')
+        .select(
+          'id, league_id, title, starts_at, location_name, city, football_format, max_players, visibility, status, registration_closed_at',
+        )
+        .order('starts_at');
+    final list = (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    if (list.isEmpty) return const [];
+    final ids = list.map((e) => e['id'].toString()).toList();
+    final leagueIds = list
+        .map((e) => e['league_id'].toString())
+        .toSet()
+        .toList();
+    final results = await Future.wait<dynamic>([
+      client!
+          .from('leagues')
+          .select('id, name, slug, city')
+          .inFilter('id', leagueIds),
+      client!
+          .from('match_participants')
+          .select('match_id, user_id, response')
+          .inFilter('match_id', ids),
+      client!.rpc('get_visible_match_counts', params: {'target_matches': ids}),
+    ]);
+    final leagueRows = <String, JsonMap>{
+      for (final raw in results[0] as List<dynamic>)
+        (raw as Map)['id'].toString(): Map<String, dynamic>.from(raw),
+    };
+    final participantRows = (results[1] as List<dynamic>? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final counts = <String, int>{
+      for (final raw in results[2] as List<dynamic>? ?? const [])
+        (raw as Map)['match_id'].toString(): asInt(raw['going_count']),
+    };
+    final ownLeagueIds = leagues.map((e) => e.id).toSet();
+    final userId = currentUserId;
+    final matches = list.map((row) {
+      final league =
+          leagueRows[row['league_id'].toString()] ?? const <String, dynamic>{};
+      final response = participantRows
+          .where(
+            (p) =>
+                p['match_id']?.toString() == row['id']?.toString() &&
+                p['user_id']?.toString() == userId,
+          )
+          .map((p) => p['response']?.toString())
+          .firstOrNull;
+      return MatchSummary(
+        id: row['id'].toString(),
+        leagueId: row['league_id'].toString(),
+        leagueName: league['name']?.toString() ?? 'Lega Kickly',
+        leagueSlug: league['slug']?.toString() ?? '',
+        title: row['title']?.toString() ?? 'Partita',
+        startsAt: asDate(row['starts_at']),
+        locationName: row['location_name']?.toString() ?? '',
+        city: row['city']?.toString() ?? league['city']?.toString() ?? '',
+        footballFormat: row['football_format']?.toString() ?? '5v5',
+        maxPlayers: asInt(row['max_players'], 10),
+        goingCount: counts[row['id'].toString()] ?? 0,
+        status: row['status']?.toString() ?? 'open',
+        visibility: row['visibility']?.toString() ?? 'league_only',
+        registrationClosedAt: row['registration_closed_at'] == null
+            ? null
+            : asDate(row['registration_closed_at']),
+        currentResponse: response,
+        isLeagueMember: ownLeagueIds.contains(row['league_id'].toString()),
+      );
+    }).toList();
     matches.sort((a, b) => a.startsAt.compareTo(b.startsAt));
     return matches;
   }
@@ -321,7 +686,9 @@ class KicklyRepository {
         .select(
           'id, league_id, created_by, title, description, starts_at, '
           'location_name, address, city, football_format, max_players, '
-          'cost_total, visibility, status, registration_closed_at',
+          'cost_total, visibility, status, registration_closed_at, '
+          'latitude, longitude, team_a_score, team_b_score, completed_at, '
+          'mvp_voting_ends_at, mvp_finalized_at',
         )
         .eq('id', id)
         .maybeSingle();
@@ -421,6 +788,10 @@ class KicklyRepository {
       currentResponse: currentResponse,
       isLeagueMember: membership != null,
     );
+    final postGame =
+        summary.status == 'completed' && match['completed_at'] != null
+        ? await _loadPostGame(id, match, userId)
+        : null;
     return MatchDetail(
       summary: summary,
       currentUserId: userId,
@@ -438,6 +809,11 @@ class KicklyRepository {
       lineupPlayers: (results[4] as List<dynamic>? ?? const [])
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList(),
+      latitude: match['latitude'] == null ? null : asDouble(match['latitude']),
+      longitude: match['longitude'] == null
+          ? null
+          : asDouble(match['longitude']),
+      postGame: postGame,
     );
   }
 
@@ -447,6 +823,142 @@ class KicklyRepository {
       'set_match_response',
       params: {'target_match': matchId, 'target_response': response},
     );
+  }
+
+  Future<void> updateMatch({
+    required String matchId,
+    required String title,
+    required String description,
+    required DateTime startsAt,
+    required String locationName,
+    required String address,
+    required String city,
+    required String footballFormat,
+    required int maxPlayers,
+    required double? costTotal,
+    required String visibility,
+  }) async {
+    if (isDemo) return;
+    await client!.rpc(
+      'update_match_details',
+      params: {
+        'target_match': matchId,
+        'match_title': title.trim(),
+        'match_description': description.trim(),
+        'match_starts_at': startsAt.toUtc().toIso8601String(),
+        'match_location_name': locationName.trim(),
+        'match_address': address.trim(),
+        'match_city': city.trim(),
+        'match_football_format': footballFormat,
+        'match_max_players': maxPlayers,
+        'match_cost_total': costTotal,
+        'match_visibility': visibility,
+      },
+    );
+  }
+
+  Future<void> setMatchAdminState(String matchId, String action) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'set_match_admin_state',
+        params: {'target_match': matchId, 'target_action': action},
+      );
+    }
+  }
+
+  Future<JsonMap> setLineupSlot(
+    String matchId,
+    int team,
+    String slot, {
+    bool captain = false,
+  }) async {
+    if (isDemo) return const {};
+    final data = await client!.rpc(
+      'set_match_lineup_slot',
+      params: {
+        'target_match': matchId,
+        'target_team': team,
+        'target_slot': slot,
+        'wants_captain': captain,
+      },
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<void> leaveLineup(String matchId) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'leave_match_lineup',
+        params: {'target_match': matchId},
+      );
+    }
+  }
+
+  Future<void> setLineupFormation(
+    String matchId,
+    int team,
+    String formation,
+  ) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'set_match_lineup_formation',
+        params: {
+          'target_match': matchId,
+          'target_team': team,
+          'target_formation': formation,
+        },
+      );
+    }
+  }
+
+  Future<int> sendMatchReminder(String matchId, String body) async {
+    if (isDemo) return 8;
+    final data = await client!.rpc(
+      'send_match_reminder',
+      params: {'target_match': matchId, 'reminder_body': body.trim()},
+    );
+    return data is Map ? asInt(data['recipient_count']) : 0;
+  }
+
+  Future<void> finalizeMatch(
+    String matchId, {
+    required List<String> teamA,
+    required List<String> teamB,
+    required int scoreA,
+    required int scoreB,
+    required List<JsonMap> playerTotals,
+  }) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'finalize_match',
+        params: {
+          'target_match': matchId,
+          'team_a_players': teamA,
+          'team_b_players': teamB,
+          'score_a': scoreA,
+          'score_b': scoreB,
+          'player_totals': playerTotals,
+        },
+      );
+    }
+  }
+
+  Future<void> castMvpVote(String matchId, String playerId) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'cast_mvp_vote',
+        params: {'target_match': matchId, 'target_player': playerId},
+      );
+    }
+  }
+
+  Future<void> finalizeMvp(String matchId) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'finalize_match_mvp',
+        params: {'target_match': matchId},
+      );
+    }
   }
 
   Future<String> createMatch({
@@ -517,12 +1029,24 @@ class KicklyRepository {
           .maybeSingle(),
       getLeagues(),
       getNotifications(),
+      client!
+          .from('player_match_stats')
+          .select(
+            'match_id, goals, assists, match_rating, result, is_mvp, created_at',
+          )
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle(),
     ]);
     final statsMap = results[0] == null
         ? null
         : Map<String, dynamic>.from(results[0] as Map);
     final leagues = results[1] as List<LeagueSummary>;
     final notifications = results[2] as List<KicklyNotification>;
+    final lastStats = results[3] == null
+        ? null
+        : Map<String, dynamic>.from(results[3] as Map);
     final matchGroups = await Future.wait(leagues.map(getLeagueMatches));
     final matches =
         matchGroups
@@ -530,6 +1054,36 @@ class KicklyRepository {
             .where((match) => !match.isPast)
             .toList()
           ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    LastMatchSummary? lastMatch;
+    if (lastStats != null) {
+      final row = await client!
+          .from('matches')
+          .select('id, league_id, title, team_a_score, team_b_score')
+          .eq('id', lastStats['match_id'])
+          .maybeSingle();
+      if (row != null) {
+        final match = Map<String, dynamic>.from(row);
+        lastMatch = LastMatchSummary(
+          id: match['id'].toString(),
+          title: match['title']?.toString() ?? 'Partita',
+          leagueName:
+              leagues
+                  .where((l) => l.id == match['league_id']?.toString())
+                  .map((l) => l.name)
+                  .firstOrNull ??
+              'Lega Kickly',
+          teamAScore: asInt(match['team_a_score']),
+          teamBScore: asInt(match['team_b_score']),
+          goals: asInt(lastStats['goals']),
+          assists: asInt(lastStats['assists']),
+          rating: lastStats['match_rating'] == null
+              ? null
+              : asDouble(lastStats['match_rating']),
+          result: lastStats['result']?.toString() ?? 'draw',
+          isMvp: lastStats['is_mvp'] == true,
+        );
+      }
+    }
     return DashboardData(
       profile: profile,
       stats: PlayerStats.fromMap(statsMap, fallbackOverall: profile.overall),
@@ -538,6 +1092,8 @@ class KicklyRepository {
           .length,
       nextMatch: matches.firstOrNull,
       leagues: leagues.take(4).toList(),
+      lastMatch: lastMatch,
+      nearby: matches.skip(1).take(4).toList(),
     );
   }
 
@@ -671,6 +1227,120 @@ class KicklyRepository {
     );
   }
 
+  Future<ProfileDetails?> getPublicProfile(String username) async {
+    if (isDemo) return getProfileDetails();
+    final row = await client!
+        .from('profiles')
+        .select(
+          'id, username, first_name, last_name, avatar_path, primary_position, secondary_position, preferred_foot, skill_level, birth_date, city, profile_public, overall, timezone, onboarding_completed',
+        )
+        .eq('username', username)
+        .eq('profile_public', true)
+        .maybeSingle();
+    if (row == null) return null;
+    final profile = _mapProfile(Map<String, dynamic>.from(row));
+    final results = await Future.wait<dynamic>([
+      client!
+          .from('player_stats')
+          .select(
+            'matches_played, wins, draws, losses, goals, assists, mvp_awards, overall',
+          )
+          .eq('user_id', profile.id)
+          .isFilter('league_id', null)
+          .isFilter('season_id', null)
+          .maybeSingle(),
+      client!
+          .from('player_rating_history')
+          .select('id, previous_rating, new_rating, delta, created_at')
+          .eq('user_id', profile.id)
+          .not('match_id', 'is', null)
+          .order('created_at')
+          .limit(10),
+      client!
+          .from('player_match_stats')
+          .select('result, created_at')
+          .eq('user_id', profile.id)
+          .order('created_at', ascending: false)
+          .limit(5),
+    ]);
+    return ProfileDetails(
+      profile: profile,
+      stats: PlayerStats.fromMap(
+        results[0] == null
+            ? null
+            : Map<String, dynamic>.from(results[0] as Map),
+        fallbackOverall: profile.overall,
+      ),
+      history: (results[1] as List<dynamic>? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      form: (results[2] as List<dynamic>? ?? const [])
+          .map((e) => (e as Map)['result'].toString())
+          .toList(),
+    );
+  }
+
+  Future<MatchPostGame> _loadPostGame(
+    String matchId,
+    JsonMap match,
+    String userId,
+  ) async {
+    final results = await Future.wait<dynamic>([
+      client!
+          .from('match_teams')
+          .select('id, name, team_number')
+          .eq('match_id', matchId)
+          .order('team_number'),
+      client!
+          .from('match_team_players')
+          .select('team_id, user_id')
+          .eq('match_id', matchId),
+      client!
+          .from('player_match_stats')
+          .select(
+            'user_id, team_id, goals, assists, result, is_mvp, match_rating, previous_overall, new_overall, rating_delta',
+          )
+          .eq('match_id', matchId),
+      client!
+          .from('mvp_votes')
+          .select('voted_player_id')
+          .eq('match_id', matchId)
+          .eq('voter_id', userId)
+          .maybeSingle(),
+    ]);
+    final assignments = (results[1] as List<dynamic>? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final teams = (results[0] as List<dynamic>? ?? const []).map((raw) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      return <String, dynamic>{
+        ...row,
+        'player_ids': assignments
+            .where((a) => a['team_id'] == row['id'])
+            .map((a) => a['user_id'].toString())
+            .toList(),
+      };
+    }).toList();
+    return MatchPostGame(
+      teamAScore: asInt(match['team_a_score']),
+      teamBScore: asInt(match['team_b_score']),
+      completedAt: asDate(match['completed_at']),
+      mvpVotingEndsAt: asDate(
+        match['mvp_voting_ends_at'] ?? match['completed_at'],
+      ),
+      mvpFinalizedAt: match['mvp_finalized_at'] == null
+          ? null
+          : asDate(match['mvp_finalized_at']),
+      teams: teams,
+      playerStats: (results[2] as List<dynamic>? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      ownVotePlayerId: results[3] == null
+          ? null
+          : (results[3] as Map)['voted_player_id']?.toString(),
+    );
+  }
+
   UserProfile _mapProfile(JsonMap row) {
     final avatarPath = row['avatar_path']?.toString();
     return UserProfile.fromMap(
@@ -690,9 +1360,12 @@ class AppState extends ChangeNotifier {
 
   final KicklyRepository repository;
   StreamSubscription<AuthState>? _authSubscription;
+  RealtimeChannel? _notificationChannel;
   bool _initializing = true;
   bool _demoSession = false;
   bool _onboardingComplete = false;
+  KicklyNotification? latestNotification;
+  int notificationRevision = 0;
 
   bool get initializing => _initializing;
   bool get isSignedIn =>
@@ -719,8 +1392,12 @@ class AppState extends ChangeNotifier {
       } catch (_) {
         _onboardingComplete = false;
       }
+      _listenForNotifications();
     } else {
       _onboardingComplete = false;
+      final channel = _notificationChannel;
+      if (channel != null) channel.unsubscribe();
+      _notificationChannel = null;
     }
     _initializing = false;
     notifyListeners();
@@ -747,9 +1424,36 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _listenForNotifications() {
+    if (repository.isDemo ||
+        _notificationChannel != null ||
+        repository.currentUserId == null) {
+      return;
+    }
+    _notificationChannel = repository.client!
+        .channel('kickly-mobile-runtime-${repository.currentUserId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: repository.currentUserId!,
+          ),
+          callback: (payload) {
+            latestNotification = KicklyNotification.fromMap(payload.newRecord);
+            notificationRevision += 1;
+            notifyListeners();
+          },
+        )
+        .subscribe();
+  }
+
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _notificationChannel?.unsubscribe();
     super.dispose();
   }
 }

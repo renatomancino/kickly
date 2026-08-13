@@ -8,14 +8,17 @@ import 'features/auth/auth_page.dart';
 import 'features/dashboard/dashboard_page.dart';
 import 'features/leagues/league_detail_page.dart';
 import 'features/leagues/league_form_page.dart';
+import 'features/leagues/league_settings_page.dart';
 import 'features/leagues/leagues_page.dart';
 import 'features/leagues/join_league_page.dart';
 import 'features/matches/match_detail_page.dart';
 import 'features/matches/match_form_page.dart';
+import 'features/matches/match_result_page.dart';
 import 'features/matches/matches_page.dart';
 import 'features/notifications/notifications_page.dart';
-import 'features/onboarding/onboarding_page.dart';
 import 'features/profile/profile_page.dart';
+import 'features/profile/profile_editor_page.dart';
+import 'features/profile/player_profile_page.dart';
 import 'features/shell/app_shell.dart';
 
 class KicklyApp extends StatefulWidget {
@@ -41,7 +44,10 @@ class _KicklyAppState extends State<KicklyApp> {
     redirect: (context, state) {
       final path = state.uri.path;
       final authPath =
-          path == '/login' || path == '/signup' || path == '/forgot-password';
+          path == '/login' ||
+          path == '/signup' ||
+          path == '/forgot-password' ||
+          path == '/update-password';
       if (widget.appState.initializing) {
         return path == '/splash' ? null : '/splash';
       }
@@ -49,7 +55,7 @@ class _KicklyAppState extends State<KicklyApp> {
       if (!widget.appState.onboardingComplete) {
         return path == '/onboarding' ? null : '/onboarding';
       }
-      if (authPath ||
+      if ((authPath && path != '/update-password') ||
           path == '/splash' ||
           path == '/onboarding' ||
           path == '/') {
@@ -71,7 +77,14 @@ class _KicklyAppState extends State<KicklyApp> {
         path: '/forgot-password',
         builder: (_, _) => const AuthPage(variant: AuthVariant.forgot),
       ),
-      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingPage()),
+      GoRoute(
+        path: '/update-password',
+        builder: (_, _) => const AuthPage(variant: AuthVariant.updatePassword),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (_, _) => const ProfileEditorPage(onboarding: true),
+      ),
       ShellRoute(
         builder: (context, state, child) =>
             AppShell(location: state.uri.path, child: child),
@@ -86,8 +99,27 @@ class _KicklyAppState extends State<KicklyApp> {
         path: '/notifications',
         builder: (_, _) => const NotificationsPage(),
       ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (_, _) => const ProfileEditorPage(),
+      ),
+      GoRoute(
+        path: '/player/:username',
+        builder: (_, state) =>
+            PlayerProfilePage(username: state.pathParameters['username']!),
+      ),
       GoRoute(path: '/leagues/new', builder: (_, _) => const LeagueFormPage()),
+      GoRoute(
+        path: '/leagues/:slug/settings',
+        builder: (_, state) =>
+            LeagueSettingsPage(slug: state.pathParameters['slug']!),
+      ),
       GoRoute(path: '/leagues/join', builder: (_, _) => const JoinLeaguePage()),
+      GoRoute(
+        path: '/join/:code',
+        builder: (_, state) =>
+            JoinLeaguePage(initialCode: state.pathParameters['code']),
+      ),
       GoRoute(
         path: '/leagues/:slug',
         builder: (_, state) =>
@@ -102,6 +134,16 @@ class _KicklyAppState extends State<KicklyApp> {
         path: '/matches/:id',
         builder: (_, state) =>
             MatchDetailPage(matchId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/matches/:id/edit',
+        builder: (_, state) =>
+            MatchFormPage(matchId: state.pathParameters['id']),
+      ),
+      GoRoute(
+        path: '/matches/:id/manage-result',
+        builder: (_, state) =>
+            MatchResultPage(matchId: state.pathParameters['id']!),
       ),
     ],
   );

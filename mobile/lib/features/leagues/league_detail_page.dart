@@ -17,7 +17,15 @@ class LeagueDetailPage extends StatefulWidget {
 }
 
 class _LeagueDetailPageState extends State<LeagueDetailPage> {
-  Future<(LeagueDetail?, List<MatchSummary>)>? _future;
+  Future<
+    (
+      LeagueDetail?,
+      List<MatchSummary>,
+      List<LeagueCommunication>,
+      List<LeaderboardPlayer>,
+    )
+  >?
+  _future;
 
   @override
   void didChangeDependencies() {
@@ -25,12 +33,36 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
     _future ??= _load();
   }
 
-  Future<(LeagueDetail?, List<MatchSummary>)> _load() async {
+  Future<
+    (
+      LeagueDetail?,
+      List<MatchSummary>,
+      List<LeagueCommunication>,
+      List<LeaderboardPlayer>,
+    )
+  >
+  _load() async {
     final repository = AppScope.of(context).repository;
     final detail = await repository.getLeague(widget.slug);
-    if (detail == null) return (null, const <MatchSummary>[]);
-    final matches = await repository.getLeagueMatches(detail.summary);
-    return (detail, matches);
+    if (detail == null) {
+      return (
+        null,
+        const <MatchSummary>[],
+        const <LeagueCommunication>[],
+        const <LeaderboardPlayer>[],
+      );
+    }
+    final values = await Future.wait<dynamic>([
+      repository.getLeagueMatches(detail.summary),
+      repository.getLeagueCommunications(detail.summary.id),
+      repository.getLeagueLeaderboard(detail.summary.id),
+    ]);
+    return (
+      detail,
+      values[0] as List<MatchSummary>,
+      values[1] as List<LeagueCommunication>,
+      values[2] as List<LeaderboardPlayer>,
+    );
   }
 
   Future<void> _refresh() async {
@@ -44,42 +76,52 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Lega')),
       body: SafeArea(
-        child: FutureBuilder<(LeagueDetail?, List<MatchSummary>)>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return PageFrame(
-                child: EmptyState(
-                  icon: Icons.cloud_off,
-                  title: 'Lega non disponibile',
-                  body: friendlyError(snapshot.error!),
-                  action: FilledButton(
-                    onPressed: _refresh,
-                    child: const Text('Riprova'),
-                  ),
-                ),
-              );
-            }
-            final detail = snapshot.data?.$1;
-            if (detail == null) {
-              return const PageFrame(
-                child: EmptyState(
-                  icon: Icons.search_off,
-                  title: 'Lega non trovata',
-                  body: 'Potresti non avere più accesso a questa lega.',
-                ),
-              );
-            }
-            return _LeagueContent(
-              detail: detail,
-              matches: snapshot.data!.$2,
-              onRefresh: _refresh,
-            );
-          },
-        ),
+        child:
+            FutureBuilder<
+              (
+                LeagueDetail?,
+                List<MatchSummary>,
+                List<LeagueCommunication>,
+                List<LeaderboardPlayer>,
+              )
+            >(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return PageFrame(
+                    child: EmptyState(
+                      icon: Icons.cloud_off,
+                      title: 'Lega non disponibile',
+                      body: friendlyError(snapshot.error!),
+                      action: FilledButton(
+                        onPressed: _refresh,
+                        child: const Text('Riprova'),
+                      ),
+                    ),
+                  );
+                }
+                final detail = snapshot.data?.$1;
+                if (detail == null) {
+                  return const PageFrame(
+                    child: EmptyState(
+                      icon: Icons.search_off,
+                      title: 'Lega non trovata',
+                      body: 'Potresti non avere più accesso a questa lega.',
+                    ),
+                  );
+                }
+                return _LeagueContent(
+                  detail: detail,
+                  matches: snapshot.data!.$2,
+                  communications: snapshot.data!.$3,
+                  leaders: snapshot.data!.$4,
+                  onRefresh: _refresh,
+                );
+              },
+            ),
       ),
     );
   }
@@ -89,18 +131,22 @@ class _LeagueContent extends StatelessWidget {
   const _LeagueContent({
     required this.detail,
     required this.matches,
+    required this.communications,
+    required this.leaders,
     required this.onRefresh,
   });
 
   final LeagueDetail detail;
   final List<MatchSummary> matches;
+  final List<LeagueCommunication> communications;
+  final List<LeaderboardPlayer> leaders;
   final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final league = detail.summary;
     return DefaultTabController(
-      length: 4,
+      length: 7,
       child: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverToBoxAdapter(
@@ -179,24 +225,39 @@ class _LeagueContent extends StatelessWidget {
                     ),
                     if (league.canManage) ...[
                       const SizedBox(height: 17),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            await Clipboard.setData(
-                              ClipboardData(text: detail.inviteCode),
-                            );
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Codice invito copiato.'),
-                                ),
-                              );
-                            }
-                          },
-                          icon: const Icon(Icons.copy),
-                          label: Text('Invita · ${detail.inviteCode}'),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                await Clipboard.setData(
+                                  ClipboardData(text: detail.inviteCode),
+                                );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Codice invito copiato.'),
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.copy),
+                              label: Text('Invita · ${detail.inviteCode}'),
+                            ),
+                          ),
+                          if (league.currentUserRole == 'owner') ...[
+                            const SizedBox(width: 8),
+                            IconButton.outlined(
+                              tooltip: 'Genera un nuovo codice',
+                              onPressed: () async {
+                                await AppScope.of(context).repository
+                                    .rotateLeagueInvite(league.id);
+                                await onRefresh();
+                              },
+                              icon: const Icon(Icons.refresh),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ],
@@ -211,8 +272,11 @@ class _LeagueContent extends StatelessWidget {
                 isScrollable: true,
                 tabs: [
                   Tab(text: 'Home'),
+                  Tab(text: 'Comunicazioni'),
                   Tab(text: 'Partite'),
+                  Tab(text: 'Classifiche'),
                   Tab(text: 'Giocatori'),
+                  Tab(text: 'Statistiche'),
                   Tab(text: 'Info'),
                 ],
               ),
@@ -222,8 +286,15 @@ class _LeagueContent extends StatelessWidget {
         body: TabBarView(
           children: [
             _LeagueHome(detail: detail, matches: matches),
+            _Communications(
+              detail: detail,
+              items: communications,
+              onRefresh: onRefresh,
+            ),
             _LeagueMatches(league: league, matches: matches),
-            _MembersList(members: detail.members),
+            _Leaderboard(players: leaders),
+            _MembersList(detail: detail, onRefresh: onRefresh),
+            _LeagueStats(players: leaders),
             _LeagueInfo(detail: detail),
           ],
         ),
@@ -395,19 +466,21 @@ class _LeagueMatches extends StatelessWidget {
 }
 
 class _MembersList extends StatelessWidget {
-  const _MembersList({required this.members});
-  final List<LeagueMember> members;
+  const _MembersList({required this.detail, required this.onRefresh});
+  final LeagueDetail detail;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.all(20),
-      itemCount: members.length,
+      itemCount: detail.members.length,
       separatorBuilder: (_, _) => const SizedBox(height: 9),
       itemBuilder: (context, index) {
-        final member = members[index];
+        final member = detail.members[index];
         return Card(
           child: ListTile(
+            onTap: () => context.push('/player/${member.username}'),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 7,
@@ -423,10 +496,373 @@ class _MembersList extends StatelessWidget {
             subtitle: Text(
               '@${member.username} · ${_roleLabel(member.footballRole)}',
             ),
-            trailing: Chip(label: Text(member.leagueRole)),
+            trailing: detail.summary.canManage && member.leagueRole != 'owner'
+                ? PopupMenuButton<String>(
+                    onSelected: (action) =>
+                        _memberAction(context, member, action),
+                    itemBuilder: (_) => [
+                      if (detail.summary.currentUserRole == 'owner')
+                        PopupMenuItem(
+                          value: 'role',
+                          child: Text(
+                            member.leagueRole == 'admin'
+                                ? 'Rendi membro'
+                                : 'Rendi admin',
+                          ),
+                        ),
+                      if (detail.summary.currentUserRole == 'owner')
+                        const PopupMenuItem(
+                          value: 'owner',
+                          child: Text('Trasferisci proprietà'),
+                        ),
+                      const PopupMenuItem(
+                        value: 'remove',
+                        child: Text('Rimuovi dalla lega'),
+                      ),
+                    ],
+                  )
+                : Chip(label: Text(member.leagueRole)),
           ),
         );
       },
+    );
+  }
+
+  Future<void> _memberAction(
+    BuildContext context,
+    LeagueMember member,
+    String action,
+  ) async {
+    final repository = AppScope.of(context).repository;
+    try {
+      if (action == 'role') {
+        await repository.setLeagueMemberRole(
+          detail.summary.id,
+          member.userId,
+          member.leagueRole == 'admin' ? 'member' : 'admin',
+        );
+      }
+      if (action == 'owner') {
+        await repository.transferLeagueOwnership(
+          detail.summary.id,
+          member.userId,
+        );
+      }
+      if (action == 'remove') {
+        await repository.removeLeagueMember(detail.summary.id, member.userId);
+      }
+      await onRefresh();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    }
+  }
+}
+
+class _Communications extends StatelessWidget {
+  const _Communications({
+    required this.detail,
+    required this.items,
+    required this.onRefresh,
+  });
+  final LeagueDetail detail;
+  final List<LeagueCommunication> items;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      if (detail.summary.canManage) ...[
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () => _compose(context),
+            icon: const Icon(Icons.campaign_outlined),
+            label: const Text('Nuova comunicazione'),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (items.isEmpty)
+        const EmptyState(
+          icon: Icons.forum_outlined,
+          title: 'Nessuna comunicazione',
+          body: 'Gli avvisi degli admin compariranno qui.',
+        )
+      else
+        ...items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 11),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(17),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        PlayerAvatar(
+                          name: item.authorName,
+                          url: item.authorAvatarUrl,
+                          radius: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.authorName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                '@${item.authorUsername}',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (item.pinned)
+                          const Icon(
+                            Icons.push_pin,
+                            size: 18,
+                            color: AppTheme.primary,
+                          ),
+                        if (detail.summary.canManage)
+                          IconButton(
+                            onPressed: () async {
+                              await AppScope.of(context).repository
+                                  .deleteLeagueCommunication(item.id);
+                              await onRefresh();
+                            },
+                            icon: const Icon(Icons.delete_outline, size: 19),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 13),
+                    Text(
+                      item.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.body,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Future<void> _compose(BuildContext context) async {
+    final title = TextEditingController(), body = TextEditingController();
+    bool pinned = false;
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: const Text('Nuova comunicazione'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                decoration: const InputDecoration(labelText: 'Titolo'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: body,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: 'Messaggio'),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: pinned,
+                onChanged: (v) => setModalState(() => pinned = v),
+                title: const Text('Fissa in alto'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Pubblica'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (submit == true && context.mounted) {
+      try {
+        await AppScope.of(context).repository.publishLeagueCommunication(
+          detail.summary.id,
+          title: title.text,
+          body: body.text,
+          pinned: pinned,
+        );
+        await onRefresh();
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+        }
+      }
+    }
+    title.dispose();
+    body.dispose();
+  }
+}
+
+class _Leaderboard extends StatefulWidget {
+  const _Leaderboard({required this.players});
+  final List<LeaderboardPlayer> players;
+  @override
+  State<_Leaderboard> createState() => _LeaderboardState();
+}
+
+class _LeaderboardState extends State<_Leaderboard> {
+  String metric = 'overall';
+  @override
+  Widget build(BuildContext context) {
+    final players = [...widget.players]
+      ..sort((a, b) => _value(b).compareTo(_value(a)));
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Wrap(
+          spacing: 7,
+          children:
+              {
+                    'overall': 'Overall',
+                    'goals': 'Gol',
+                    'assists': 'Assist',
+                    'mvp': 'MVP',
+                    'matches': 'Presenze',
+                  }.entries
+                  .map(
+                    (e) => ChoiceChip(
+                      selected: metric == e.key,
+                      label: Text(e.value),
+                      onSelected: (_) => setState(() => metric = e.key),
+                    ),
+                  )
+                  .toList(),
+        ),
+        const SizedBox(height: 16),
+        ...players.indexed.map(
+          (e) => Card(
+            child: ListTile(
+              onTap: () => context.push('/player/${e.$2.username}'),
+              leading: CircleAvatar(
+                backgroundColor: e.$1 < 3
+                    ? AppTheme.primary
+                    : AppTheme.surfaceHigh,
+                foregroundColor: e.$1 < 3 ? AppTheme.background : Colors.white,
+                child: Text(
+                  '${e.$1 + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              title: Text(
+                e.$2.name,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text('@${e.$2.username} · ${e.$2.matches} partite'),
+              trailing: Text(
+                '${_value(e.$2)}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  int _value(LeaderboardPlayer p) => switch (metric) {
+    'goals' => p.goals,
+    'assists' => p.assists,
+    'mvp' => p.mvp,
+    'matches' => p.matches,
+    _ => p.overall,
+  };
+}
+
+class _LeagueStats extends StatelessWidget {
+  const _LeagueStats({required this.players});
+  final List<LeaderboardPlayer> players;
+  @override
+  Widget build(BuildContext context) {
+    final matches = players.fold<int>(0, (v, p) => v + p.matches);
+    final goals = players.fold<int>(0, (v, p) => v + p.goals);
+    final assists = players.fold<int>(0, (v, p) => v + p.assists);
+    final average = players.isEmpty
+        ? 0
+        : (players.fold<int>(0, (v, p) => v + p.overall) / players.length)
+              .round();
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const SectionTitle(title: 'Numeri della lega', eyebrow: 'Statistiche'),
+        const SizedBox(height: 12),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.35,
+          children: [
+            StatTile(
+              label: 'Presenze',
+              value: matches,
+              icon: Icons.calendar_month,
+            ),
+            StatTile(label: 'Gol', value: goals, icon: Icons.sports_soccer),
+            StatTile(
+              label: 'Assist',
+              value: assists,
+              icon: Icons.assistant_direction,
+            ),
+            StatTile(
+              label: 'OVR medio',
+              value: average,
+              icon: Icons.auto_graph,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -472,8 +908,52 @@ class _LeagueInfo extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        if (league.canManage)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push('/leagues/${league.slug}/settings'),
+              icon: const Icon(Icons.settings_outlined),
+              label: const Text('Impostazioni lega'),
+            ),
+          ),
+        if (league.currentUserRole != 'owner') ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _leave(context),
+              icon: const Icon(Icons.logout),
+              label: const Text('Lascia lega'),
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  Future<void> _leave(BuildContext context) async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lasciare la lega?'),
+        content: const Text('Per rientrare servirà un nuovo invito.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Lascia'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !context.mounted) return;
+    await AppScope.of(context).repository.leaveLeague(detail.summary.id);
+    if (context.mounted) context.go('/leagues');
   }
 }
 

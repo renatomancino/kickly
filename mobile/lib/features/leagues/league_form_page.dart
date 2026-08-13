@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+
+import 'dart:typed_data';
 
 import '../../app.dart';
 import '../../core/widgets/common.dart';
@@ -16,12 +19,32 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   final _city = TextEditingController();
-  final _country = TextEditingController(text: 'Italia');
+  final _country = TextEditingController(text: 'IT');
   String _format = '5v5';
   String _visibility = 'private';
   int _maxMembers = 20;
   bool _loading = false;
   String? _error;
+  Uint8List? _logoBytes;
+  String? _logoExtension;
+
+  Future<void> _pickLogo() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      imageQuality: 88,
+    );
+    if (image == null) return;
+    final bytes = await image.readAsBytes();
+    if (bytes.length > 5 * 1024 * 1024) {
+      setState(() => _error = 'Il logo deve pesare meno di 5 MB.');
+      return;
+    }
+    setState(() {
+      _logoBytes = bytes;
+      _logoExtension = image.name.split('.').last;
+    });
+  }
 
   @override
   void dispose() {
@@ -53,6 +76,8 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
         visibility: _visibility,
         footballFormat: _format,
         maxMembers: _maxMembers,
+        logoBytes: _logoBytes,
+        logoExtension: _logoExtension,
       );
       if (mounted) context.go('/leagues/$slug');
     } catch (error) {
@@ -84,6 +109,61 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                     style: TextStyle(color: Colors.white54),
                   ),
                   const SizedBox(height: 25),
+                  Card(
+                    child: InkWell(
+                      onTap: _pickLogo,
+                      borderRadius: BorderRadius.circular(22),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 62,
+                              height: 62,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary
+                                    .withValues(alpha: .12),
+                                borderRadius: BorderRadius.circular(17),
+                                image: _logoBytes == null
+                                    ? null
+                                    : DecorationImage(
+                                        image: MemoryImage(_logoBytes!),
+                                        fit: BoxFit.cover,
+                                      ),
+                              ),
+                              child: _logoBytes == null
+                                  ? const Icon(Icons.add_a_photo_outlined)
+                                  : null,
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Logo della lega',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'JPG, PNG o WebP · max 5 MB',
+                                    style: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   TextFormField(
                     controller: _name,
                     decoration: const InputDecoration(labelText: 'Nome lega'),
@@ -111,7 +191,9 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _country,
-                          decoration: const InputDecoration(labelText: 'Paese'),
+                          decoration: const InputDecoration(
+                            labelText: 'Codice paese',
+                          ),
                           validator: _required,
                         ),
                       ),

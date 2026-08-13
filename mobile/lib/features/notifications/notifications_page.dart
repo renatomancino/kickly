@@ -6,6 +6,7 @@ import '../../app.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
+import '../../data/kickly_repository.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -16,11 +17,33 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   Future<List<KicklyNotification>>? _future;
+  AppState? _appState;
+  int _seenRevision = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _future ??= AppScope.of(context).repository.getNotifications();
+    final state = AppScope.of(context).appState;
+    if (!identical(_appState, state)) {
+      _appState?.removeListener(_onNotification);
+      _appState = state;
+      _seenRevision = state.notificationRevision;
+      state.addListener(_onNotification);
+    }
+  }
+
+  void _onNotification() {
+    final state = _appState!;
+    if (state.notificationRevision == _seenRevision) return;
+    _seenRevision = state.notificationRevision;
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    _appState?.removeListener(_onNotification);
+    super.dispose();
   }
 
   Future<void> _reload() async {

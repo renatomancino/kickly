@@ -6,7 +6,8 @@ import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
 class JoinLeaguePage extends StatefulWidget {
-  const JoinLeaguePage({super.key});
+  const JoinLeaguePage({super.key, this.initialCode});
+  final String? initialCode;
 
   @override
   State<JoinLeaguePage> createState() => _JoinLeaguePageState();
@@ -17,6 +18,17 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
   JsonMap? _preview;
   bool _loading = false;
   String? _error;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized && widget.initialCode?.isNotEmpty == true) {
+      _initialized = true;
+      _code.text = widget.initialCode!.toUpperCase();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _search());
+    }
+  }
 
   @override
   void dispose() {

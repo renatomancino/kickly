@@ -7,9 +7,10 @@ import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
 class MatchFormPage extends StatefulWidget {
-  const MatchFormPage({super.key, this.initialLeagueId});
+  const MatchFormPage({super.key, this.initialLeagueId, this.matchId});
 
   final String? initialLeagueId;
+  final String? matchId;
 
   @override
   State<MatchFormPage> createState() => _MatchFormPageState();
@@ -30,12 +31,36 @@ class _MatchFormPageState extends State<MatchFormPage> {
   int _maxPlayers = 10;
   DateTime _startsAt = DateTime.now().add(const Duration(days: 2, hours: 2));
   bool _loading = false;
+  bool _initialized = false;
   String? _error;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _leaguesFuture ??= AppScope.of(context).repository.getLeagues();
+    _leaguesFuture ??= _load();
+  }
+
+  Future<List<LeagueSummary>> _load() async {
+    final repository = AppScope.of(context).repository;
+    final leagues = await repository.getLeagues();
+    if (widget.matchId != null && !_initialized) {
+      final match = await repository.getMatch(widget.matchId!);
+      if (match != null) {
+        _leagueId = match.summary.leagueId;
+        _title.text = match.summary.title;
+        _description.text = match.description ?? '';
+        _location.text = match.summary.locationName;
+        _address.text = match.address ?? '';
+        _city.text = match.summary.city;
+        _cost.text = match.costTotal?.toString() ?? '';
+        _format = match.summary.footballFormat;
+        _visibility = match.summary.visibility;
+        _maxPlayers = match.summary.maxPlayers;
+        _startsAt = match.summary.startsAt;
+      }
+    }
+    _initialized = true;
+    return leagues;
   }
 
   @override
@@ -50,11 +75,14 @@ class _MatchFormPageState extends State<MatchFormPage> {
   }
 
   Future<void> _pickDateTime() async {
+    final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
       initialDate: _startsAt,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 730)),
+      firstDate: _startsAt.isBefore(now)
+          ? _startsAt.subtract(const Duration(days: 1))
+          : now,
+      lastDate: now.add(const Duration(days: 730)),
     );
     if (date == null || !mounted) return;
     final time = await showTimePicker(
@@ -80,7 +108,25 @@ class _MatchFormPageState extends State<MatchFormPage> {
       _error = null;
     });
     try {
-      final matchId = await AppScope.of(context).repository.createMatch(
+      final repository = AppScope.of(context).repository;
+      if (widget.matchId != null) {
+        await repository.updateMatch(
+          matchId: widget.matchId!,
+          title: _title.text,
+          description: _description.text,
+          startsAt: _startsAt,
+          locationName: _location.text,
+          address: _address.text,
+          city: _city.text,
+          footballFormat: _format,
+          maxPlayers: _maxPlayers,
+          costTotal: double.tryParse(_cost.text.replaceAll(',', '.')),
+          visibility: _visibility,
+        );
+        if (mounted) context.go('/matches/${widget.matchId}');
+        return;
+      }
+      final matchId = await repository.createMatch(
         leagueId: _leagueId!,
         title: _title.text,
         description: _description.text,
@@ -112,7 +158,11 @@ class _MatchFormPageState extends State<MatchFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuova partita')),
+      appBar: AppBar(
+        title: Text(
+          widget.matchId == null ? 'Nuova partita' : 'Modifica partita',
+        ),
+      ),
       body: SafeArea(
         child: FutureBuilder<List<LeagueSummary>>(
           future: _leaguesFuture,
@@ -162,7 +212,9 @@ class _MatchFormPageState extends State<MatchFormPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Organizza il match',
+                        widget.matchId == null
+                            ? 'Organizza il match'
+                            : 'Aggiorna il match',
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 7),
@@ -182,7 +234,9 @@ class _MatchFormPageState extends State<MatchFormPage> {
                               ),
                             )
                             .toList(),
-                        onChanged: (value) => setState(() => _leagueId = value),
+                        onChanged: widget.matchId == null
+                            ? (value) => setState(() => _leagueId = value)
+                            : null,
                       ),
                       const SizedBox(height: 14),
                       TextFormField(

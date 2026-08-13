@@ -136,36 +136,48 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 12),
               SizedBox(
-                height: 122,
-                child: GridView.count(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 9,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    StatTile(
-                      label: 'Partite',
-                      value: stats.matches,
-                      icon: Icons.sports_soccer,
-                    ),
-                    StatTile(
-                      label: 'Gol',
-                      value: stats.goals,
-                      icon: Icons.sports_score,
-                    ),
-                    StatTile(
-                      label: 'Assist',
-                      value: stats.assists,
-                      icon: Icons.assistant_direction,
-                    ),
-                    StatTile(
-                      label: 'MVP',
-                      value: stats.mvp,
-                      icon: Icons.emoji_events_outlined,
-                    ),
-                  ],
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await context.push('/profile/edit');
+                    if (context.mounted) await _reload();
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Modifica profilo'),
                 ),
+              ),
+              const SizedBox(height: 22),
+              GridView.count(
+                shrinkWrap: true,
+                crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 4 : 2,
+                crossAxisSpacing: 9,
+                mainAxisSpacing: 9,
+                childAspectRatio: 1.35,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  StatTile(
+                    label: 'Partite',
+                    value: stats.matches,
+                    icon: Icons.sports_soccer,
+                  ),
+                  StatTile(
+                    label: 'Gol',
+                    value: stats.goals,
+                    icon: Icons.sports_score,
+                  ),
+                  StatTile(
+                    label: 'Assist',
+                    value: stats.assists,
+                    icon: Icons.assistant_direction,
+                  ),
+                  StatTile(
+                    label: 'MVP',
+                    value: stats.mvp,
+                    icon: Icons.emoji_events_outlined,
+                  ),
+                ],
               ),
               const SizedBox(height: 22),
               Card(

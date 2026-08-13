@@ -2,6 +2,8 @@
 
 App Flutter nativa per Android e iOS collegata allo stesso progetto Supabase della web app.
 
+La versione mobile mantiene la parità funzionale con la PWA: dashboard, profili e player card pubbliche, leghe e inviti/deep link, comunicazioni, classifiche, gestione membri e impostazioni, partite pubbliche, RSVP, formazioni, strumenti admin, promemoria, risultati, statistiche e votazione MVP.
+
 ## Stack
 
 - Flutter 3.47 / Dart 3.13
@@ -39,4 +41,10 @@ Senza configurazione Supabase l'app offre una modalità demo locale dal login.
 
 ## Backend
 
-Il client mobile riusa tabelle, Storage, trigger, RLS e RPC già presenti in `../supabase`. Le notifiche in-app sono operative tramite la tabella `notifications`. Le notifiche push di sistema richiedono inoltre le credenziali APNs/FCM del proprietario degli account Apple e Google; non vengono inserite nel client né nel repository.
+Il client mobile riusa tabelle, Storage, trigger, RLS e RPC già presenti in `../supabase` senza duplicare la logica di business nel telefono.
+
+## Notifiche
+
+Le notifiche in-app sono operative tramite la stessa tabella `notifications` della PWA. Flutter mostra quindi lo stesso titolo, lo stesso messaggio e apre lo stesso link; gli inserimenti vengono ascoltati anche in Realtime. Su Android sono già configurati il permesso notifiche, il marchio Kickly e il colore `#C7FF3D` da usare come icona/colore predefiniti.
+
+Le notifiche push di sistema quando l'app è chiusa richiedono un canale mobile diverso dal Web Push della PWA: occorrono `google-services.json`/credenziali FCM per Android e APNs per iOS, più il relativo sender server-side. Questi segreti appartengono agli account Google e Apple del proprietario e non devono essere inseriti nel repository. Finché non vengono forniti, restano operative le notifiche in-app e Realtime, non il banner di sistema a processo terminato.

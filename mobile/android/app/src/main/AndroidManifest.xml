@@ -1,9 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="Kickly"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- FCM uses the Kickly mark and brand green when Firebase credentials are added. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher_foreground" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/kickly_green" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

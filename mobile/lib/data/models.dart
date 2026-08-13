@@ -1,4 +1,21 @@
+import 'dart:convert';
+
 typedef JsonMap = Map<String, dynamic>;
+
+String repairText(String value) {
+  var candidate = value;
+  for (var pass = 0; pass < 3; pass++) {
+    if (!RegExp(r'[ÃÂâð]').hasMatch(candidate)) break;
+    try {
+      final decoded = utf8.decode(latin1.encode(candidate));
+      if (decoded == candidate) break;
+      candidate = decoded;
+    } catch (_) {
+      break;
+    }
+  }
+  return candidate;
+}
 
 int asInt(Object? value, [int fallback = 0]) {
   if (value is int) return value;
@@ -23,6 +40,11 @@ class UserProfile {
     required this.avatarUrl,
     required this.primaryPosition,
     required this.skillLevel,
+    this.birthDate,
+    this.city,
+    this.secondaryPosition,
+    this.preferredFoot,
+    this.profilePublic = true,
     required this.overall,
     required this.timezone,
     required this.onboardingCompleted,
@@ -36,6 +58,11 @@ class UserProfile {
     avatarUrl: avatarUrl,
     primaryPosition: map['primary_position']?.toString(),
     skillLevel: map['skill_level']?.toString(),
+    birthDate: map['birth_date']?.toString(),
+    city: map['city']?.toString(),
+    secondaryPosition: map['secondary_position']?.toString(),
+    preferredFoot: map['preferred_foot']?.toString(),
+    profilePublic: map['profile_public'] != false,
     overall: asInt(map['overall'], 70),
     timezone: map['timezone']?.toString() ?? 'Europe/Rome',
     onboardingCompleted: map['onboarding_completed'] == true,
@@ -48,6 +75,11 @@ class UserProfile {
   final String? avatarUrl;
   final String? primaryPosition;
   final String? skillLevel;
+  final String? birthDate;
+  final String? city;
+  final String? secondaryPosition;
+  final String? preferredFoot;
+  final bool profilePublic;
   final int overall;
   final String timezone;
   final bool onboardingCompleted;
@@ -188,6 +220,56 @@ class LeagueDetail {
   final List<LeagueMember> members;
 }
 
+class LeagueCommunication {
+  const LeagueCommunication({
+    required this.id,
+    required this.matchId,
+    required this.createdBy,
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.pinned,
+    required this.createdAt,
+    required this.authorName,
+    required this.authorUsername,
+    this.authorAvatarUrl,
+  });
+  final String id;
+  final String? matchId;
+  final String createdBy;
+  final String kind;
+  final String title;
+  final String body;
+  final bool pinned;
+  final DateTime createdAt;
+  final String authorName;
+  final String authorUsername;
+  final String? authorAvatarUrl;
+}
+
+class LeaderboardPlayer {
+  const LeaderboardPlayer({
+    required this.userId,
+    required this.username,
+    required this.name,
+    this.avatarUrl,
+    required this.matches,
+    required this.goals,
+    required this.assists,
+    required this.mvp,
+    required this.overall,
+  });
+  final String userId;
+  final String username;
+  final String name;
+  final String? avatarUrl;
+  final int matches;
+  final int goals;
+  final int assists;
+  final int mvp;
+  final int overall;
+}
+
 class MatchSummary {
   const MatchSummary({
     required this.id,
@@ -294,6 +376,9 @@ class MatchDetail {
     required this.participants,
     required this.lineupTeams,
     required this.lineupPlayers,
+    this.latitude,
+    this.longitude,
+    this.postGame,
   });
 
   final MatchSummary summary;
@@ -306,9 +391,60 @@ class MatchDetail {
   final List<MatchParticipant> participants;
   final List<JsonMap> lineupTeams;
   final List<JsonMap> lineupPlayers;
+  final double? latitude;
+  final double? longitude;
+  final MatchPostGame? postGame;
 
   bool get canManage =>
       currentUserRole == 'owner' || currentUserRole == 'admin';
+}
+
+class MatchPostGame {
+  const MatchPostGame({
+    required this.teamAScore,
+    required this.teamBScore,
+    required this.completedAt,
+    required this.mvpVotingEndsAt,
+    this.mvpFinalizedAt,
+    required this.teams,
+    required this.playerStats,
+    this.ownVotePlayerId,
+    this.mvpVotes,
+  });
+  final int teamAScore;
+  final int teamBScore;
+  final DateTime completedAt;
+  final DateTime mvpVotingEndsAt;
+  final DateTime? mvpFinalizedAt;
+  final List<JsonMap> teams;
+  final List<JsonMap> playerStats;
+  final String? ownVotePlayerId;
+  final int? mvpVotes;
+}
+
+class LastMatchSummary {
+  const LastMatchSummary({
+    required this.id,
+    required this.title,
+    required this.leagueName,
+    required this.teamAScore,
+    required this.teamBScore,
+    required this.goals,
+    required this.assists,
+    this.rating,
+    required this.result,
+    required this.isMvp,
+  });
+  final String id;
+  final String title;
+  final String leagueName;
+  final int teamAScore;
+  final int teamBScore;
+  final int goals;
+  final int assists;
+  final double? rating;
+  final String result;
+  final bool isMvp;
 }
 
 class DashboardData {
@@ -318,6 +454,8 @@ class DashboardData {
     required this.unreadNotifications,
     required this.nextMatch,
     required this.leagues,
+    this.lastMatch,
+    this.nearby = const [],
   });
 
   final UserProfile profile;
@@ -325,6 +463,8 @@ class DashboardData {
   final int unreadNotifications;
   final MatchSummary? nextMatch;
   final List<LeagueSummary> leagues;
+  final LastMatchSummary? lastMatch;
+  final List<MatchSummary> nearby;
 }
 
 class KicklyNotification {
@@ -341,8 +481,8 @@ class KicklyNotification {
   factory KicklyNotification.fromMap(JsonMap map) => KicklyNotification(
     id: map['id'].toString(),
     type: map['type']?.toString() ?? 'info',
-    title: map['title']?.toString() ?? 'Kickly',
-    body: map['body']?.toString() ?? '',
+    title: repairText(map['title']?.toString() ?? 'Kickly'),
+    body: repairText(map['body']?.toString() ?? ''),
     link: map['link']?.toString(),
     readAt: map['read_at'] == null ? null : asDate(map['read_at']),
     createdAt: asDate(map['created_at']),

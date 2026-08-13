@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
 import '../../core/theme/app_theme.dart';
@@ -90,6 +91,7 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
               match: match,
               responding: _responding,
               onRespond: _respond,
+              onReload: _reload,
             );
           },
         ),
@@ -103,11 +105,13 @@ class _MatchContent extends StatelessWidget {
     required this.match,
     required this.responding,
     required this.onRespond,
+    required this.onReload,
   });
 
   final MatchDetail match;
   final bool responding;
   final ValueChanged<String> onRespond;
+  final Future<void> Function() onReload;
 
   @override
   Widget build(BuildContext context) {
@@ -227,9 +231,10 @@ class _MatchContent extends StatelessWidget {
               match: match,
               responding: responding,
               onRespond: onRespond,
+              onReload: onReload,
             ),
             _PlayersTab(participants: match.participants),
-            _LineupTab(match: match),
+            _InteractiveLineupTab(match: match),
           ],
         ),
       ),
@@ -259,10 +264,12 @@ class _DetailsTab extends StatelessWidget {
     required this.match,
     required this.responding,
     required this.onRespond,
+    required this.onReload,
   });
   final MatchDetail match;
   final bool responding;
   final ValueChanged<String> onRespond;
+  final Future<void> Function() onReload;
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +281,188 @@ class _DetailsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        if (!summary.isLeagueMember && summary.visibility == 'public') ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Partita pubblica',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 5),
+                  const Text(
+                    'Entra nella lega per confermare la presenza e scegliere la formazione.',
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => _joinPublic(context),
+                      child: const Text('Entra nella lega'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _PostGameStats(match: match),
+          const SizedBox(height: 18),
+        ],
+        if (match.postGame != null) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Text(
+                    'RISULTATO FINALE',
+                    style: TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${match.postGame!.teamAScore} – ${match.postGame!.teamBScore}',
+                    style: const TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Team A   ·   Team B',
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                  const Divider(height: 28),
+                  if (match.postGame!.mvpFinalizedAt != null) ...[
+                    const Icon(
+                      Icons.emoji_events,
+                      color: Color(0xFFFFD166),
+                      size: 30,
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      _mvpName(),
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const Text(
+                      'MVP della partita',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'VOTA L’MVP',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      alignment: WrapAlignment.center,
+                      children: match.participants
+                          .where((p) => p.response == 'going')
+                          .map(
+                            (player) => ChoiceChip(
+                              selected:
+                                  match.postGame!.ownVotePlayerId ==
+                                  player.userId,
+                              onSelected: (_) => _vote(context, player.userId),
+                              label: Text(player.displayName),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    if (match.canManage) ...[
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: () => _finalizeMvp(context),
+                        icon: const Icon(Icons.workspace_premium_outlined),
+                        label: const Text('Chiudi votazione MVP'),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        if (match.canManage) ...[
+          const SectionTitle(
+            title: 'Gestione partita',
+            eyebrow: 'Strumenti admin',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 9,
+            runSpacing: 9,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => context.push('/matches/${summary.id}/edit'),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Modifica'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _reminder(context),
+                icon: const Icon(Icons.campaign_outlined),
+                label: const Text('Promemoria'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _adminAction(
+                  context,
+                  summary.registrationClosedAt == null ? 'close' : 'reopen',
+                ),
+                icon: Icon(
+                  summary.registrationClosedAt == null
+                      ? Icons.lock_outline
+                      : Icons.lock_open,
+                ),
+                label: Text(
+                  summary.registrationClosedAt == null
+                      ? 'Chiudi iscrizioni'
+                      : 'Riapri',
+                ),
+              ),
+              if (summary.status != 'completed')
+                FilledButton.icon(
+                  onPressed: () =>
+                      context.push('/matches/${summary.id}/manage-result'),
+                  icon: const Icon(Icons.emoji_events_outlined),
+                  label: const Text('Chiudi partita'),
+                ),
+              if (summary.status == 'completed')
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      context.push('/matches/${summary.id}/manage-result'),
+                  icon: const Icon(Icons.edit_note),
+                  label: const Text('Correggi risultato'),
+                ),
+              if (summary.status != 'completed' &&
+                  summary.status != 'cancelled')
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: () => _adminAction(context, 'cancel'),
+                  icon: const Icon(Icons.cancel_outlined),
+                  label: const Text('Annulla partita'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
         if (isOpen && summary.isLeagueMember) ...[
           const SectionTitle(title: 'Ci sarai?', eyebrow: 'Conferma presenza'),
           const SizedBox(height: 12),
@@ -353,6 +542,167 @@ class _DetailsTab extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _adminAction(BuildContext context, String action) async {
+    try {
+      await AppScope.of(context).repository
+          .setMatchAdminState(match.summary.id, action);
+      await onReload();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    }
+  }
+
+  Future<void> _joinPublic(BuildContext context) async {
+    try {
+      await AppScope.of(context).repository
+          .joinPublicLeague(match.summary.leagueId);
+      await onReload();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
+      }
+    }
+  }
+
+  String _mvpName() {
+    final winnerId = match.postGame!.playerStats
+        .where((row) => row['is_mvp'] == true)
+        .map((row) => row['user_id']?.toString())
+        .firstOrNull;
+    return match.participants
+            .where((player) => player.userId == winnerId)
+            .map((player) => player.displayName)
+            .firstOrNull ??
+        'MVP';
+  }
+
+  Future<void> _vote(BuildContext context, String playerId) async {
+    try {
+      await AppScope.of(context).repository
+          .castMvpVote(match.summary.id, playerId);
+      await onReload();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
+      }
+    }
+  }
+
+  Future<void> _finalizeMvp(BuildContext context) async {
+    try {
+      await AppScope.of(context).repository.finalizeMvp(match.summary.id);
+      await onReload();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
+      }
+    }
+  }
+
+  Future<void> _reminder(BuildContext context) async {
+    final controller = TextEditingController(
+      text: 'Ricordati di confermare la presenza per ${match.summary.title}.',
+    );
+    final body = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Invia promemoria'),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'Messaggio'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Invia'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (body == null || body.trim().length < 3 || !context.mounted) return;
+    try {
+      final count = await AppScope.of(context).repository
+          .sendMatchReminder(match.summary.id, body);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Promemoria inviato a $count giocatori.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    }
+  }
+}
+
+class _PostGameStats extends StatelessWidget {
+  const _PostGameStats({required this.match});
+  final MatchDetail match;
+  @override
+  Widget build(BuildContext context) {
+    final stats = match.postGame!.playerStats;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Prestazioni', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            ...stats.map((row) {
+              final player = match.participants
+                  .where((p) => p.userId == row['user_id']?.toString())
+                  .firstOrNull;
+              final delta = asDouble(row['rating_delta']);
+              return ListTile(
+                onTap: player == null
+                    ? null
+                    : () => context.push('/player/${player.username}'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: PlayerAvatar(
+                  name: player?.displayName ?? 'Giocatore',
+                  url: player?.avatarUrl,
+                  radius: 18,
+                ),
+                title: Text(
+                  player?.displayName ?? 'Giocatore',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  '${asInt(row['goals'])} gol · ${asInt(row['assists'])} assist · voto ${row['match_rating'] ?? '—'}',
+                ),
+                trailing: Text(
+                  delta == 0
+                      ? '—'
+                      : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1)}',
+                  style: TextStyle(
+                    color: delta >= 0 ? AppTheme.primary : Colors.redAccent,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -457,6 +807,7 @@ class _PlayersTab extends StatelessWidget {
         final player = sorted[index];
         return Card(
           child: ListTile(
+            onTap: () => context.push('/player/${player.username}'),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 6,
@@ -478,6 +829,8 @@ class _PlayersTab extends StatelessWidget {
   }
 }
 
+// Kept as a compact read-only fallback for narrow embedded contexts.
+// ignore: unused_element
 class _LineupTab extends StatelessWidget {
   const _LineupTab({required this.match});
   final MatchDetail match;
@@ -550,6 +903,230 @@ class _LineupTab extends StatelessWidget {
       }).toList(),
     );
   }
+}
+
+class _InteractiveLineupTab extends StatefulWidget {
+  const _InteractiveLineupTab({required this.match});
+  final MatchDetail match;
+  @override
+  State<_InteractiveLineupTab> createState() => _InteractiveLineupTabState();
+}
+
+class _InteractiveLineupTabState extends State<_InteractiveLineupTab> {
+  late MatchDetail match = widget.match;
+  bool busy = false;
+
+  Future<void> _slot(int team, String slot) async {
+    setState(() => busy = true);
+    final repository = AppScope.of(context).repository;
+    try {
+      await repository.setLineupSlot(match.summary.id, team, slot);
+      final next = await repository.getMatch(match.summary.id);
+      if (next != null && mounted) setState(() => match = next);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _leave() async {
+    setState(() => busy = true);
+    final repository = AppScope.of(context).repository;
+    try {
+      await repository.leaveLineup(match.summary.id);
+      final next = await repository.getMatch(match.summary.id);
+      if (next != null && mounted) setState(() => match = next);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _formation(int team, String formation) async {
+    setState(() => busy = true);
+    final repository = AppScope.of(context).repository;
+    try {
+      await repository.setLineupFormation(match.summary.id, team, formation);
+      final next = await repository.getMatch(match.summary.id);
+      if (next != null && mounted) setState(() => match = next);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      const Text(
+        'Scegli una posizione libera. Puoi cambiare squadra o lasciare la formazione.',
+        style: TextStyle(color: Colors.white54, height: 1.45),
+      ),
+      const SizedBox(height: 12),
+      if (busy) const LinearProgressIndicator(),
+      const SizedBox(height: 12),
+      ...[1, 2].map(_team),
+      if (match.lineupPlayers.any(
+        (row) => row['user_id']?.toString() == match.currentUserId,
+      ))
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: busy ? null : _leave,
+            icon: const Icon(Icons.logout),
+            label: const Text('Lascia formazione'),
+          ),
+        ),
+    ],
+  );
+
+  Widget _team(int teamNumber) {
+    final team = match.lineupTeams
+        .where((row) => asInt(row['team_number']) == teamNumber)
+        .firstOrNull;
+    final rows = match.lineupPlayers
+        .where((row) => asInt(row['team_number']) == teamNumber)
+        .toList();
+    final side = asInt(match.summary.footballFormat.split('v').first, 5);
+    final canChangeFormation =
+        match.canManage ||
+        team?['captain_user_id']?.toString() == match.currentUserId;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Squadra $teamNumber',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const Spacer(),
+                  if (canChangeFormation)
+                    PopupMenuButton<String>(
+                      onSelected: (value) => _formation(teamNumber, value),
+                      itemBuilder: (_) =>
+                          _formations(match.summary.footballFormat)
+                              .map(
+                                (value) => PopupMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                      child: Chip(
+                        label: Text(team?['formation']?.toString() ?? '—'),
+                      ),
+                    )
+                  else
+                    Chip(label: Text(team?['formation']?.toString() ?? '—')),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF173D23),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: side,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 9,
+                    crossAxisSpacing: 9,
+                    childAspectRatio: 1.35,
+                  ),
+                  itemBuilder: (context, index) {
+                    final slot = index == 0 ? 'gk' : 'p$index';
+                    final row = rows
+                        .where((r) => r['slot_key']?.toString() == slot)
+                        .firstOrNull;
+                    final player = row == null
+                        ? null
+                        : match.participants
+                              .where(
+                                (p) => p.userId == row['user_id']?.toString(),
+                              )
+                              .firstOrNull;
+                    final mine = player?.userId == match.currentUserId;
+                    return InkWell(
+                      onTap: busy || player != null
+                          ? null
+                          : () => _slot(teamNumber, slot),
+                      borderRadius: BorderRadius.circular(13),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: mine
+                              ? AppTheme.primary
+                              : Colors.black.withValues(
+                                  alpha: player == null ? .18 : .38,
+                                ),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(
+                            color: player == null
+                                ? Colors.white24
+                                : (mine ? AppTheme.primary : Colors.white38),
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              player == null ? Icons.add : Icons.sports_soccer,
+                              size: 18,
+                              color: mine ? AppTheme.background : Colors.white,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              player?.displayName ??
+                                  (index == 0 ? 'Portiere' : 'Libero'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: mine
+                                    ? AppTheme.background
+                                    : Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<String> _formations(String format) => switch (format) {
+    '5v5' => const ['1-2-1', '2-1-1', '1-1-2'],
+    '7v7' => const ['2-3-1', '3-2-1', '2-2-2'],
+    '8v8' => const ['3-3-1', '2-3-2', '3-2-2'],
+    '10v10' => const ['3-4-2', '4-3-2', '4-4-1'],
+    _ => const ['4-3-3', '4-4-2', '3-5-2'],
+  };
 }
 
 String _statusLabel(String status) => switch (status) {

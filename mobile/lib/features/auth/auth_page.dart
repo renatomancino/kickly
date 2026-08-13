@@ -5,7 +5,7 @@ import '../../app.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 
-enum AuthVariant { login, signup, forgot }
+enum AuthVariant { login, signup, forgot, updatePassword }
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key, required this.variant});
@@ -36,6 +36,7 @@ class _AuthPageState extends State<AuthPage> {
   String get _title => switch (widget.variant) {
     AuthVariant.login => 'Bentornato in campo',
     AuthVariant.signup => 'Crea il tuo profilo',
+    AuthVariant.updatePassword => 'Scegli una nuova password',
     AuthVariant.forgot => 'Recupera l’accesso',
   };
 
@@ -43,6 +44,8 @@ class _AuthPageState extends State<AuthPage> {
     AuthVariant.login =>
       'Accedi per vedere la prossima partita e le tue statistiche.',
     AuthVariant.signup => 'La tua prossima partita comincia da qui.',
+    AuthVariant.updatePassword =>
+      'Proteggi il tuo account con almeno 8 caratteri.',
     AuthVariant.forgot =>
       'Ti invieremo un link sicuro per scegliere una nuova password.',
   };
@@ -81,6 +84,9 @@ class _AuthPageState extends State<AuthPage> {
             () => _message =
                 'Se l’account esiste, riceverai un link di recupero.',
           );
+        case AuthVariant.updatePassword:
+          await scope.repository.updatePassword(_passwordController.text);
+          if (mounted) context.go('/dashboard');
       }
     } catch (error) {
       setState(() => _message = friendlyError(error));
@@ -93,6 +99,7 @@ class _AuthPageState extends State<AuthPage> {
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
     final needsPassword = widget.variant != AuthVariant.forgot;
+    final needsEmail = widget.variant != AuthVariant.updatePassword;
     return Scaffold(
       body: SafeArea(
         child: PageFrame(
@@ -144,22 +151,23 @@ class _AuthPageState extends State<AuthPage> {
                     key: _formKey,
                     child: Column(
                       children: [
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: needsPassword
-                              ? TextInputAction.next
-                              : TextInputAction.done,
-                          autofillHints: const [AutofillHints.email],
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: Icon(Icons.mail_outline),
+                        if (needsEmail)
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: needsPassword
+                                ? TextInputAction.next
+                                : TextInputAction.done,
+                            autofillHints: const [AutofillHints.email],
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              prefixIcon: Icon(Icons.mail_outline),
+                            ),
+                            validator: (value) =>
+                                value != null && value.contains('@')
+                                ? null
+                                : 'Inserisci un’email valida.',
                           ),
-                          validator: (value) =>
-                              value != null && value.contains('@')
-                              ? null
-                              : 'Inserisci un’email valida.',
-                        ),
                         if (needsPassword) ...[
                           const SizedBox(height: 15),
                           TextFormField(
@@ -186,7 +194,8 @@ class _AuthPageState extends State<AuthPage> {
                                 : 'Usa almeno 8 caratteri.',
                           ),
                         ],
-                        if (widget.variant == AuthVariant.signup) ...[
+                        if (widget.variant == AuthVariant.signup ||
+                            widget.variant == AuthVariant.updatePassword) ...[
                           const SizedBox(height: 15),
                           TextFormField(
                             controller: _confirmController,
@@ -242,6 +251,7 @@ class _AuthPageState extends State<AuthPage> {
                       label: Text(switch (widget.variant) {
                         AuthVariant.login => 'Accedi',
                         AuthVariant.signup => 'Crea account',
+                        AuthVariant.updatePassword => 'Aggiorna password',
                         AuthVariant.forgot => 'Invia link',
                       }),
                     ),
@@ -279,6 +289,7 @@ class _AuthPageState extends State<AuthPage> {
                         onPressed: () => context.go('/login'),
                         child: const Text('Torna al login'),
                       ),
+                      AuthVariant.updatePassword => const SizedBox.shrink(),
                     },
                   ),
                 ],

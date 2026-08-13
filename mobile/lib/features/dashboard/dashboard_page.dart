@@ -59,23 +59,15 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               Row(
                 children: [
-                  PlayerAvatar(
-                    name: data.profile.displayName,
-                    url: data.profile.avatarUrl,
-                  ),
+                  const KicklyMark(size: 42),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'BENTORNATO IN CAMPO',
-                          style: TextStyle(
-                            color: Colors.white38,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.3,
-                          ),
+                          'Bentornato,',
+                          style: TextStyle(color: Colors.white54, fontSize: 11),
                         ),
                         Text(
                           data.profile.firstName ?? data.profile.username,
@@ -108,41 +100,78 @@ class _DashboardPageState extends State<DashboardPage> {
                 )
               else
                 _HeroMatch(match: data.nextMatch!),
+              if (data.lastMatch != null) ...[
+                const SizedBox(height: 16),
+                _LastMatchCard(match: data.lastMatch!),
+              ],
               const SizedBox(height: 27),
               const SectionTitle(
                 eyebrow: 'La tua stagione',
                 title: 'Numeri in campo',
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                height: 122,
-                child: GridView.count(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 9,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    StatTile(
-                      label: 'Partite',
-                      value: data.stats.matches,
-                      icon: Icons.sports_soccer,
+              GridView.count(
+                shrinkWrap: true,
+                crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 5 : 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.35,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  StatTile(
+                    label: 'Partite',
+                    value: data.stats.matches,
+                    icon: Icons.sports_soccer,
+                  ),
+                  StatTile(
+                    label: 'Gol',
+                    value: data.stats.goals,
+                    icon: Icons.sports_score,
+                  ),
+                  StatTile(
+                    label: 'Assist',
+                    value: data.stats.assists,
+                    icon: Icons.assistant_direction,
+                  ),
+                  StatTile(
+                    label: 'MVP',
+                    value: data.stats.mvp,
+                    icon: Icons.emoji_events_outlined,
+                  ),
+                  Card(
+                    color: AppTheme.primary,
+                    child: Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.auto_awesome,
+                            color: AppTheme.background,
+                            size: 18,
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${data.stats.overall}',
+                            style: const TextStyle(
+                              color: AppTheme.background,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const Text(
+                            'Overall',
+                            style: TextStyle(
+                              color: AppTheme.background,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    StatTile(
-                      label: 'Gol',
-                      value: data.stats.goals,
-                      icon: Icons.sports_score,
-                    ),
-                    StatTile(
-                      label: 'Assist',
-                      value: data.stats.assists,
-                      icon: Icons.assistant_direction,
-                    ),
-                    StatTile(
-                      label: 'MVP',
-                      value: data.stats.mvp,
-                      icon: Icons.emoji_events_outlined,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
               const SizedBox(height: 27),
               SectionTitle(
@@ -185,12 +214,101 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                 ),
+              const SizedBox(height: 25),
+              SectionTitle(
+                eyebrow: 'Le tue prossime partite',
+                title: 'In programma',
+                trailing: TextButton(
+                  onPressed: () => context.go('/matches'),
+                  child: const Text('Vedi tutte'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (data.nearby.isEmpty)
+                const EmptyState(
+                  icon: Icons.event_available,
+                  title: 'Nessun altro appuntamento',
+                  body: 'Le nuove partite delle tue leghe compariranno qui.',
+                )
+              else
+                ...data.nearby.map(
+                  (match) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: MatchCard(
+                      match: match,
+                      onTap: () => context.push('/matches/${match.id}'),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
       },
     );
   }
+}
+
+class _LastMatchCard extends StatelessWidget {
+  const _LastMatchCard({required this.match});
+  final LastMatchSummary match;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: InkWell(
+      onTap: () => context.push('/matches/${match.id}'),
+      borderRadius: BorderRadius.circular(22),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ULTIMA PARTITA',
+                    style: TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    match.title,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  Text(
+                    match.leagueName,
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${match.teamAScore} – ${match.teamBScore}',
+              style: const TextStyle(fontSize: 29, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(width: 12),
+            CircleAvatar(
+              backgroundColor: AppTheme.primary.withValues(alpha: .14),
+              child: Text(
+                match.result == 'win'
+                    ? 'W'
+                    : match.result == 'loss'
+                    ? 'L'
+                    : 'D',
+                style: const TextStyle(
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _HeroMatch extends StatelessWidget {
@@ -200,11 +318,6 @@ class _HeroMatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final day = DateFormat('dd').format(match.startsAt);
-    final month = DateFormat(
-      'MMM',
-      'it_IT',
-    ).format(match.startsAt).toUpperCase();
     return Card(
       child: InkWell(
         onTap: () => context.push('/matches/${match.id}'),
@@ -223,75 +336,55 @@ class _HeroMatch extends StatelessWidget {
             ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 62,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceHigh,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          day,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          month,
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 15),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Chip(
-                              label: Text(
-                                match.footballFormat.replaceAll('v', ' vs '),
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              DateFormat('HH:mm').format(match.startsAt),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ],
+                        Chip(
+                          label: Text(
+                            match.footballFormat.replaceAll('v', ' vs '),
+                          ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
+                        Text(
+                          match.leagueName,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
                         Text(
                           match.title,
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          match.leagueName,
-                          style: const TextStyle(color: Colors.white54),
-                        ),
                       ],
+                    ),
+                  ),
+                  if (match.currentResponse == 'going')
+                    const Chip(label: Text('• Confermato')),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  const Icon(Icons.schedule, color: AppTheme.primary, size: 18),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      DateFormat(
+                        'EEE dd MMM · HH:mm',
+                        'it_IT',
+                      ).format(match.startsAt),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   const Icon(
@@ -301,17 +394,53 @@ class _HeroMatch extends StatelessWidget {
                   ),
                   const SizedBox(width: 7),
                   Expanded(child: Text(match.locationName)),
-                  Text(
-                    '${match.goingCount}/${match.maxPlayers}',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: (match.goingCount / match.maxPlayers).clamp(0, 1),
-                minHeight: 7,
-                borderRadius: BorderRadius.circular(99),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: AppTheme.background.withValues(alpha: .45),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.outline),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '${match.goingCount}/${match.maxPlayers} giocatori',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${match.maxPlayers - match.goingCount} posti',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: (match.goingCount / match.maxPlayers).clamp(0, 1),
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => context.push('/matches/${match.id}'),
+                  child: const Text('Visualizza partita'),
+                ),
               ),
             ],
           ),
