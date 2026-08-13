@@ -1,0 +1,372 @@
+typedef JsonMap = Map<String, dynamic>;
+
+int asInt(Object? value, [int fallback = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+double asDouble(Object? value, [double fallback = 0]) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+DateTime asDate(Object? value) =>
+    DateTime.tryParse(value?.toString() ?? '')?.toLocal() ?? DateTime.now();
+
+class UserProfile {
+  const UserProfile({
+    required this.id,
+    required this.username,
+    required this.firstName,
+    required this.lastName,
+    required this.avatarUrl,
+    required this.primaryPosition,
+    required this.skillLevel,
+    required this.overall,
+    required this.timezone,
+    required this.onboardingCompleted,
+  });
+
+  factory UserProfile.fromMap(JsonMap map, {String? avatarUrl}) => UserProfile(
+    id: map['id']?.toString() ?? '',
+    username: map['username']?.toString() ?? 'giocatore',
+    firstName: map['first_name']?.toString(),
+    lastName: map['last_name']?.toString(),
+    avatarUrl: avatarUrl,
+    primaryPosition: map['primary_position']?.toString(),
+    skillLevel: map['skill_level']?.toString(),
+    overall: asInt(map['overall'], 70),
+    timezone: map['timezone']?.toString() ?? 'Europe/Rome',
+    onboardingCompleted: map['onboarding_completed'] == true,
+  );
+
+  final String id;
+  final String username;
+  final String? firstName;
+  final String? lastName;
+  final String? avatarUrl;
+  final String? primaryPosition;
+  final String? skillLevel;
+  final int overall;
+  final String timezone;
+  final bool onboardingCompleted;
+
+  String get displayName {
+    final value = [
+      firstName,
+      lastName,
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' ');
+    return value.isEmpty ? '@$username' : value;
+  }
+}
+
+class PlayerStats {
+  const PlayerStats({
+    this.matches = 0,
+    this.wins = 0,
+    this.draws = 0,
+    this.losses = 0,
+    this.goals = 0,
+    this.assists = 0,
+    this.mvp = 0,
+    this.overall = 70,
+  });
+
+  factory PlayerStats.fromMap(JsonMap? map, {int fallbackOverall = 70}) =>
+      PlayerStats(
+        matches: asInt(map?['matches_played']),
+        wins: asInt(map?['wins']),
+        draws: asInt(map?['draws']),
+        losses: asInt(map?['losses']),
+        goals: asInt(map?['goals']),
+        assists: asInt(map?['assists']),
+        mvp: asInt(map?['mvp_awards']),
+        overall: asInt(map?['overall'], fallbackOverall),
+      );
+
+  final int matches;
+  final int wins;
+  final int draws;
+  final int losses;
+  final int goals;
+  final int assists;
+  final int mvp;
+  final int overall;
+
+  int get winRate => matches == 0 ? 0 : ((wins / matches) * 100).round();
+}
+
+class LeagueSummary {
+  const LeagueSummary({
+    required this.id,
+    required this.name,
+    required this.slug,
+    required this.description,
+    required this.logoUrl,
+    required this.city,
+    required this.country,
+    required this.visibility,
+    required this.footballFormat,
+    required this.maxMembers,
+    required this.memberCount,
+    required this.currentUserRole,
+  });
+
+  factory LeagueSummary.fromRpc(JsonMap map) => LeagueSummary(
+    id: map['id'].toString(),
+    name: map['name']?.toString() ?? 'Lega Kickly',
+    slug: map['slug']?.toString() ?? '',
+    description: map['description']?.toString(),
+    logoUrl: map['logo_url']?.toString(),
+    city: map['city']?.toString() ?? '',
+    country: map['country']?.toString() ?? 'Italia',
+    visibility: map['visibility']?.toString() ?? 'private',
+    footballFormat: map['football_format']?.toString() ?? '5v5',
+    maxMembers: asInt(map['max_members'], 20),
+    memberCount: asInt(map['member_count']),
+    currentUserRole: map['current_user_role']?.toString() ?? 'member',
+  );
+
+  final String id;
+  final String name;
+  final String slug;
+  final String? description;
+  final String? logoUrl;
+  final String city;
+  final String country;
+  final String visibility;
+  final String footballFormat;
+  final int maxMembers;
+  final int memberCount;
+  final String currentUserRole;
+
+  bool get canManage =>
+      currentUserRole == 'owner' || currentUserRole == 'admin';
+}
+
+class LeagueMember {
+  const LeagueMember({
+    required this.id,
+    required this.userId,
+    required this.username,
+    required this.firstName,
+    required this.lastName,
+    required this.avatarUrl,
+    required this.footballRole,
+    required this.leagueRole,
+    required this.joinedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String username;
+  final String? firstName;
+  final String? lastName;
+  final String? avatarUrl;
+  final String? footballRole;
+  final String leagueRole;
+  final DateTime joinedAt;
+
+  String get displayName {
+    final name = [firstName, lastName].whereType<String>().join(' ').trim();
+    return name.isEmpty ? '@$username' : name;
+  }
+}
+
+class LeagueDetail {
+  const LeagueDetail({
+    required this.summary,
+    required this.ownerId,
+    required this.inviteCode,
+    required this.members,
+  });
+
+  final LeagueSummary summary;
+  final String ownerId;
+  final String inviteCode;
+  final List<LeagueMember> members;
+}
+
+class MatchSummary {
+  const MatchSummary({
+    required this.id,
+    required this.leagueId,
+    required this.leagueName,
+    required this.leagueSlug,
+    required this.title,
+    required this.startsAt,
+    required this.locationName,
+    required this.city,
+    required this.footballFormat,
+    required this.maxPlayers,
+    required this.goingCount,
+    required this.status,
+    required this.visibility,
+    required this.registrationClosedAt,
+    required this.currentResponse,
+    required this.isLeagueMember,
+  });
+
+  factory MatchSummary.fromRpc(JsonMap map, {required LeagueSummary league}) =>
+      MatchSummary(
+        id: map['id'].toString(),
+        leagueId: map['league_id'].toString(),
+        leagueName: league.name,
+        leagueSlug: league.slug,
+        title: map['title']?.toString() ?? 'Partita',
+        startsAt: asDate(map['starts_at']),
+        locationName: map['location_name']?.toString() ?? '',
+        city: map['city']?.toString() ?? league.city,
+        footballFormat:
+            map['football_format']?.toString() ?? league.footballFormat,
+        maxPlayers: asInt(map['max_players'], 10),
+        goingCount: asInt(map['going_count']),
+        status: map['status']?.toString() ?? 'open',
+        visibility: map['visibility']?.toString() ?? 'league_only',
+        registrationClosedAt: map['registration_closed_at'] == null
+            ? null
+            : asDate(map['registration_closed_at']),
+        currentResponse: map['current_response']?.toString(),
+        isLeagueMember: true,
+      );
+
+  final String id;
+  final String leagueId;
+  final String leagueName;
+  final String leagueSlug;
+  final String title;
+  final DateTime startsAt;
+  final String locationName;
+  final String city;
+  final String footballFormat;
+  final int maxPlayers;
+  final int goingCount;
+  final String status;
+  final String visibility;
+  final DateTime? registrationClosedAt;
+  final String? currentResponse;
+  final bool isLeagueMember;
+
+  bool get isPast => startsAt.isBefore(DateTime.now()) || status == 'completed';
+}
+
+class MatchParticipant {
+  const MatchParticipant({
+    required this.id,
+    required this.userId,
+    required this.username,
+    required this.firstName,
+    required this.lastName,
+    required this.avatarUrl,
+    required this.footballRole,
+    required this.overall,
+    required this.response,
+    required this.joinedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String username;
+  final String? firstName;
+  final String? lastName;
+  final String? avatarUrl;
+  final String? footballRole;
+  final int overall;
+  final String response;
+  final DateTime joinedAt;
+
+  String get displayName {
+    final name = [firstName, lastName].whereType<String>().join(' ').trim();
+    return name.isEmpty ? '@$username' : name;
+  }
+}
+
+class MatchDetail {
+  const MatchDetail({
+    required this.summary,
+    required this.currentUserId,
+    required this.createdBy,
+    required this.description,
+    required this.address,
+    required this.costTotal,
+    required this.currentUserRole,
+    required this.participants,
+    required this.lineupTeams,
+    required this.lineupPlayers,
+  });
+
+  final MatchSummary summary;
+  final String currentUserId;
+  final String createdBy;
+  final String? description;
+  final String? address;
+  final double? costTotal;
+  final String? currentUserRole;
+  final List<MatchParticipant> participants;
+  final List<JsonMap> lineupTeams;
+  final List<JsonMap> lineupPlayers;
+
+  bool get canManage =>
+      currentUserRole == 'owner' || currentUserRole == 'admin';
+}
+
+class DashboardData {
+  const DashboardData({
+    required this.profile,
+    required this.stats,
+    required this.unreadNotifications,
+    required this.nextMatch,
+    required this.leagues,
+  });
+
+  final UserProfile profile;
+  final PlayerStats stats;
+  final int unreadNotifications;
+  final MatchSummary? nextMatch;
+  final List<LeagueSummary> leagues;
+}
+
+class KicklyNotification {
+  const KicklyNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.link,
+    required this.readAt,
+    required this.createdAt,
+  });
+
+  factory KicklyNotification.fromMap(JsonMap map) => KicklyNotification(
+    id: map['id'].toString(),
+    type: map['type']?.toString() ?? 'info',
+    title: map['title']?.toString() ?? 'Kickly',
+    body: map['body']?.toString() ?? '',
+    link: map['link']?.toString(),
+    readAt: map['read_at'] == null ? null : asDate(map['read_at']),
+    createdAt: asDate(map['created_at']),
+  );
+
+  final String id;
+  final String type;
+  final String title;
+  final String body;
+  final String? link;
+  final DateTime? readAt;
+  final DateTime createdAt;
+}
+
+class ProfileDetails {
+  const ProfileDetails({
+    required this.profile,
+    required this.stats,
+    required this.history,
+    required this.form,
+  });
+
+  final UserProfile profile;
+  final PlayerStats stats;
+  final List<JsonMap> history;
+  final List<String> form;
+}
