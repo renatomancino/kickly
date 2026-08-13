@@ -330,6 +330,13 @@ with check (
   and (select private.can_manage_match_media(name))
 );
 
+create policy "League managers read match media objects"
+on storage.objects for select to authenticated
+using (
+  bucket_id = 'match-media'
+  and (select private.can_manage_match_media(name))
+);
+
 create policy "League managers update match media"
 on storage.objects for update to authenticated
 using (
