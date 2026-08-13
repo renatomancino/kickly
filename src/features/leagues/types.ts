@@ -36,6 +36,26 @@ export interface LeagueDetail extends LeagueSummary {
   members: LeagueMember[];
 }
 
+export type LeagueCommunicationKind = "announcement" | "match_reminder";
+
+export interface LeagueCommunication {
+  id: string;
+  leagueId: string;
+  matchId: string | null;
+  createdBy: string;
+  kind: LeagueCommunicationKind;
+  title: string;
+  body: string;
+  pinned: boolean;
+  createdAt: string;
+  author: {
+    firstName: string | null;
+    lastName: string | null;
+    username: string;
+    avatarUrl: string | null;
+  };
+}
+
 export interface InvitePreview {
   id: string;
   name: string;

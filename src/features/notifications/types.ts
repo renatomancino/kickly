@@ -1,6 +1,6 @@
 import type { Json } from "@/types/database";
 
-export type NotificationKind = "match_created" | "match_updated" | "match_cancelled" | "match_reminder" | "waitlist_promoted" | "mvp_voting_open" | "mvp_winner" | "rating_changed" | "league_invite" | "league_role_changed";
+export type NotificationKind = "match_created" | "match_updated" | "match_cancelled" | "match_reminder" | "waitlist_promoted" | "mvp_voting_open" | "mvp_winner" | "rating_changed" | "league_invite" | "league_role_changed" | "league_announcement";
 
 export interface NotificationItem {
   id: string;

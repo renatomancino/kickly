@@ -15,5 +15,8 @@ export function leagueRpcMessage(message: string) {
   if (message.includes("cannot_remove_owner")) return "L’owner non può essere rimosso.";
   if (message.includes("owner_cannot_leave")) return "Trasferisci prima la proprietà oppure elimina la lega.";
   if (message.includes("member_not_found")) return "Membro non trovato.";
+  if (message.includes("invalid_communication")) return "Controlla titolo e testo della comunicazione.";
+  if (message.includes("communication_rate_limited")) return "Attendi qualche secondo prima di pubblicare un altro messaggio.";
+  if (message.includes("communication_not_found")) return "Comunicazione non trovata.";
   return "Operazione non riuscita. Riprova.";
 }

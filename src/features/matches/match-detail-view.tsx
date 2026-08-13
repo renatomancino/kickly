@@ -40,6 +40,7 @@ import type { AttendanceStatus, MatchStatus } from "@/types/database";
 import { mapsUrl, matchDateLabel, matchStatusLabel, matchTimeLabel } from "./format";
 import type { MatchDetail, MatchParticipantView } from "./types";
 import { MatchLineupBoard } from "./match-lineup-board";
+import { MatchReminderDialog } from "./match-reminder-dialog";
 import { PostGameSummary } from "./post-game-summary";
 
 interface RsvpResult {
@@ -206,6 +207,7 @@ export function MatchDetailView({ match }: { match: MatchDetail }) {
         </div>
 
         <aside className="space-y-5">
+          {canManage && status !== "cancelled" && status !== "completed" ? <MatchReminderDialog matchId={match.id} matchTitle={match.title} /> : null}
           <Card><CardHeader><CardTitle>Dettagli</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><Detail icon={<UsersRound />} label="Formato" value={match.footballFormat.replace("v", " vs ")} /><Detail icon={<MapPin />} label="Città" value={match.city} />{match.costTotal !== null ? <><Detail icon={<Coins />} label="Costo campo" value={`${formatMoney(match.costTotal)} €`} /><Detail icon={<Coins />} label="Circa a giocatore" value={going ? `${formatMoney(match.costTotal / going)} €` : "—"} /></> : null}{match.description ? <><Separator /><div><p className="text-xs text-muted-foreground">Note</p><p className="mt-2 leading-6">{match.description}</p></div></> : null}</CardContent></Card>
           {canManage ? <Card><CardHeader><CardTitle>Gestione partita</CardTitle></CardHeader><CardContent className="grid gap-2">{status !== "cancelled" && status !== "completed" ? <Button asChild><Link href={`/matches/${match.id}/manage-result`}><Trophy />Gestisci risultato</Link></Button> : null}<Button asChild variant="outline"><Link href={`/matches/${match.id}/edit`}><Pencil />Modifica partita</Link></Button>{status !== "cancelled" && status !== "completed" ? <Button disabled={pending !== null} onClick={() => adminAction(closedAt ? "reopen" : "close")} variant="outline"><LockKeyhole />{closedAt ? "Riapri iscrizioni" : "Chiudi iscrizioni"}</Button> : null}{status !== "cancelled" && status !== "completed" ? <AlertDialog><AlertDialogTrigger asChild><Button variant="destructive">Annulla partita</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Annullare la partita?</AlertDialogTitle><AlertDialogDescription>Gli RSVP verranno bloccati, ma la partita resterà nello storico.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Indietro</AlertDialogCancel><AlertDialogAction onClick={() => adminAction("cancel")} variant="destructive">Annulla partita</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog> : null}</CardContent></Card> : null}
         </aside>

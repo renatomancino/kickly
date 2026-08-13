@@ -41,6 +41,10 @@ export const adminStateSchema = z.object({
   action: z.enum(["cancel", "close", "reopen"]),
 });
 
+export const matchReminderSchema = z.object({
+  body: z.string().trim().min(3, "Inserisci un messaggio di almeno 3 caratteri.").max(500),
+});
+
 const postGamePlayerSchema = z.object({
   user_id: z.string().uuid(),
   goals: z.number().int().min(0).max(99),

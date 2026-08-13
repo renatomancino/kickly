@@ -28,4 +28,10 @@ export const deleteLeagueSchema = z.object({
   confirmation: z.string().trim().min(1),
 });
 
+export const leagueCommunicationSchema = z.object({
+  title: z.string().trim().min(3, "Inserisci un titolo di almeno 3 caratteri.").max(120),
+  body: z.string().trim().min(3, "Inserisci un messaggio di almeno 3 caratteri.").max(500),
+  pinned: z.boolean().default(false),
+});
+
 export type LeagueInput = z.infer<typeof leagueSchema>;

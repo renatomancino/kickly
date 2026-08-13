@@ -55,6 +55,11 @@ export function LeagueRealtimeSync({
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "league_communications", filter: `league_id=eq.${leagueId}` },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "match_participants" },
         refreshParticipantChange,
       )

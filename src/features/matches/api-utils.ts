@@ -34,5 +34,8 @@ export function matchRpcMessage(message: string) {
   if (message.includes("participant_required")) return "Solo i partecipanti possono votare l’MVP.";
   if (message.includes("mvp_voting_closed")) return "La votazione MVP è terminata.";
   if (message.includes("duplicate key")) return "Hai già votato per questa partita.";
+  if (message.includes("invalid_reminder")) return "Inserisci un promemoria valido.";
+  if (message.includes("reminder_rate_limited")) return "Hai appena inviato un promemoria. Riprova tra qualche minuto.";
+  if (message.includes("no_reminder_recipients")) return "Non ci sono ancora partecipanti a cui inviare il promemoria.";
   return "Operazione non riuscita. Riprova.";
 }

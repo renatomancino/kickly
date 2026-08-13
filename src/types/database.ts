@@ -75,6 +75,17 @@ export interface Database {
         joined_at: string;
         created_at: string;
       }>;
+      league_communications: BaseTable<{
+        id: string;
+        league_id: string;
+        match_id: string | null;
+        created_by: string;
+        kind: "announcement" | "match_reminder";
+        title: string;
+        body: string;
+        pinned: boolean;
+        created_at: string;
+      }>;
       matches: BaseTable<{
         id: string;
         league_id: string;
@@ -321,6 +332,23 @@ export interface Database {
       finalize_match_mvp: {
         Args: { target_match: string };
         Returns: string;
+      };
+      publish_league_communication: {
+        Args: {
+          target_league: string;
+          communication_title: string;
+          communication_body: string;
+          communication_pinned?: boolean;
+        };
+        Returns: string;
+      };
+      send_match_reminder: {
+        Args: { target_match: string; reminder_body: string };
+        Returns: Json;
+      };
+      delete_league_communication: {
+        Args: { target_communication: string };
+        Returns: undefined;
       };
       [key: string]: { Args: Record<string, unknown>; Returns: unknown };
     };

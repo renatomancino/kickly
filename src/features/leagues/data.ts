@@ -8,12 +8,25 @@ import type { FootballRole, MatchFormat } from "@/types/database";
 
 import type {
   InvitePreview,
+  LeagueCommunication,
   LeagueDetail,
   LeagueMember,
   LeagueRole,
   LeagueSummary,
   LeagueVisibility,
 } from "./types";
+
+interface LeagueCommunicationRow {
+  id: string;
+  league_id: string;
+  match_id: string | null;
+  created_by: string;
+  kind: "announcement" | "match_reminder";
+  title: string;
+  body: string;
+  pinned: boolean;
+  created_at: string;
+}
 
 interface LeagueRow {
   id: string;
@@ -100,6 +113,57 @@ export const getLeagueBySlug = cache(
       inviteCode: league.invite_code,
       members,
     };
+  },
+);
+
+export const getLeagueCommunications = cache(
+  async (leagueId: string): Promise<LeagueCommunication[]> => {
+    await requireUser();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("league_communications")
+      .select("id, league_id, match_id, created_by, kind, title, body, pinned, created_at")
+      .eq("league_id", leagueId)
+      .order("pinned", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) throw new Error("Impossibile caricare le comunicazioni.");
+    const communications = (data ?? []) as LeagueCommunicationRow[];
+    const authorIds = [...new Set(communications.map((item) => item.created_by))];
+    const { data: profiles, error: profilesError } = authorIds.length
+      ? await supabase
+          .from("profiles")
+          .select("id, first_name, last_name, username, avatar_path")
+          .in("id", authorIds)
+      : { data: [], error: null };
+
+    if (profilesError) throw new Error("Impossibile caricare gli autori delle comunicazioni.");
+    const authors = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+
+    return communications.map((item) => {
+      const profile = authors.get(item.created_by);
+      const avatarUrl = profile?.avatar_path
+        ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
+        : null;
+      return {
+        id: item.id,
+        leagueId: item.league_id,
+        matchId: item.match_id,
+        createdBy: item.created_by,
+        kind: item.kind,
+        title: item.title,
+        body: item.body,
+        pinned: item.pinned,
+        createdAt: item.created_at,
+        author: {
+          firstName: profile?.first_name ?? null,
+          lastName: profile?.last_name ?? null,
+          username: profile?.username ?? "giocatore",
+          avatarUrl,
+        },
+      };
+    });
   },
 );
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getLeagueBySlug } from "@/features/leagues/data";
+import { getLeagueBySlug, getLeagueCommunications } from "@/features/leagues/data";
 import { LeaguePageView } from "@/features/leagues/league-page-view";
 import { getLeagueMatches } from "@/features/matches/data";
 import { requireUser } from "@/lib/auth";
@@ -13,10 +13,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: league?.name ?? "Lega" };
 }
 
-export default async function LeaguePage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default async function LeaguePage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ tab?: string }> }) {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const [user, league] = await Promise.all([requireUser(), getLeagueBySlug(slug)]);
   if (!league) notFound();
-  const [matches, leaderboards] = await Promise.all([getLeagueMatches(league), getLeagueLeaderboards(league.id)]);
-  return <LeaguePageView currentUserId={user.id} league={league} leaderboards={leaderboards} matches={matches} />;
+  const [matches, leaderboards, communications] = await Promise.all([getLeagueMatches(league), getLeagueLeaderboards(league.id), getLeagueCommunications(league.id)]);
+  return <LeaguePageView communications={communications} currentUserId={user.id} initialTab={query.tab === "communications" ? "communications" : "home"} league={league} leaderboards={leaderboards} matches={matches} />;
 }
