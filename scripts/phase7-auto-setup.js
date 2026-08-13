@@ -3,8 +3,6 @@
  * Applies migrations, configures test accounts, sets vault secrets
  */
 
-import fs from 'fs';
-
 (async () => {
   const { createClient } = await import('@supabase/supabase-js');
 
@@ -25,39 +23,8 @@ import fs from 'fs';
   // ============================================================================
   console.log('1️⃣  Applying RLS migration fixes...');
   try {
-    const migrationSQL = `
--- Allow authenticated users to insert league membership requests
-create or replace policy "Users can insert league membership requests"
-  on public.league_members
-  for insert to authenticated
-  with check (
-    user_id = auth.uid()
-  );
-
--- Enable RLS for player_rating_history
-alter table public.player_rating_history enable row level security;
-
-create policy if not exists "Users insert own rating history"
-  on public.player_rating_history
-  for insert to authenticated
-  with check (
-    user_id = auth.uid()
-  );
-
-create policy if not exists "Users read rating history"
-  on public.player_rating_history
-  for select to authenticated
-  using (
-    user_id = auth.uid() 
-    or exists (
-      select 1 from public.matches
-      where id = match_id and visibility = 'public'
-    )
-  );
-    `;
-
     // Execute via service role
-    const { error: sqlError } = await supabase.rpc('public.claim_push_deliveries', {}, { head: false });
+    await supabase.rpc('public.claim_push_deliveries', {}, { head: false });
     
     // Try direct SQL execution via PostgreSQL (if available)
     console.log('  ⚠️  Migration status: requires manual application via Supabase SQL Editor');
@@ -103,7 +70,7 @@ create policy if not exists "Users read rating history"
       const userId = user.id;
 
       // Upsert league membership
-      const { data, error: upsertError } = await supabase
+      const { error: upsertError } = await supabase
         .from('league_members')
         .upsert(
           {
@@ -120,7 +87,7 @@ create policy if not exists "Users read rating history"
       } else {
         console.log(`  ✓ ${email} configured as ${role}`);
       }
-    } catch (e) {
+    } catch {
       console.log(`  ! Exception for ${email}: ${e.message}`);
     }
   }
@@ -159,7 +126,7 @@ create policy if not exists "Users read rating history"
       } else {
         console.log(`  ✓ ${secretName} configured`);
       }
-    } catch (e) {
+    } catch {
       console.log(`  ⚠️  ${secretName}: requires manual configuration in Vault`);
     }
   }
@@ -171,11 +138,13 @@ create policy if not exists "Users read rating history"
 
   try {
     // Query for functions to warm up schema cache
-    const { error: err1 } = await supabase.rpc('finalize_match_mvp', { target_match: '00000000-0000-0000-0000-000000000000' }).then(() => ({error: null})).catch(e => ({error: e}));
-    const { error: err2 } = await supabase.rpc('private.process_notification_schedule', {}).then(() => ({error: null})).catch(e => ({error: e}));
+    await Promise.allSettled([
+      supabase.rpc('finalize_match_mvp', { target_match: '00000000-0000-0000-0000-000000000000' }),
+      supabase.rpc('private.process_notification_schedule', {}),
+    ]);
     
     console.log('  ✓ Schema cache refresh triggered');
-  } catch (e) {
+  } catch {
     console.log('  ! Schema cache refresh may require reconnection');
   }
 

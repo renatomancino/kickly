@@ -49,38 +49,44 @@ export function MembersList({
 
   async function executeAction() {
     if (!pending) return;
+    const selected = pending;
     setWorking(true);
-    const response = await fetch(`/api/leagues/${leagueId}/members/${pending.member.userId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: pending.action }),
-    });
-    const result = (await response.json()) as { message?: string };
-    setWorking(false);
-    if (!response.ok) {
-      toast.error(result.message ?? "Operazione non riuscita.");
-      return;
-    }
-    setMembers((current) => {
-      if (pending.action === "remove") return current.filter((member) => member.userId !== pending.member.userId);
-      if (pending.action === "transfer") {
-        return current.map((member) =>
-          member.userId === pending.member.userId
-            ? { ...member, leagueRole: "owner" }
-            : member.userId === currentUserId
-              ? { ...member, leagueRole: "admin" }
-              : member,
-        );
+    try {
+      const response = await fetch(`/api/leagues/${leagueId}/members/${selected.member.userId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: selected.action }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        toast.error(result.message ?? "Operazione non riuscita.");
+        return;
       }
-      return current.map((member) =>
-        member.userId === pending.member.userId
-          ? { ...member, leagueRole: pending.action === "promote" ? "admin" : "member" }
-          : member,
-      );
-    });
-    toast.success(actionSuccess(pending.action));
-    setPending(null);
-    router.refresh();
+      setMembers((current) => {
+        if (selected.action === "remove") return current.filter((member) => member.userId !== selected.member.userId);
+        if (selected.action === "transfer") {
+          return current.map((member) =>
+            member.userId === selected.member.userId
+              ? { ...member, leagueRole: "owner" }
+              : member.userId === currentUserId
+                ? { ...member, leagueRole: "admin" }
+                : member,
+          );
+        }
+        return current.map((member) =>
+          member.userId === selected.member.userId
+            ? { ...member, leagueRole: selected.action === "promote" ? "admin" : "member" }
+            : member,
+        );
+      });
+      toast.success(actionSuccess(selected.action));
+      setPending(null);
+      router.refresh();
+    } catch {
+      toast.error("Connessione non disponibile. Riprova.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   return (

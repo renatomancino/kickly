@@ -31,28 +31,38 @@ export function LeagueSettings({ league }: { league: LeagueDetail }) {
 
   async function leave() {
     setWorking(true);
-    const response = await fetch(`/api/leagues/${league.id}/leave`, { method: "POST" });
-    const result = (await response.json()) as { message?: string };
-    setWorking(false);
-    if (!response.ok) return toast.error(result.message ?? "Operazione non riuscita.");
-    toast.success("Hai lasciato la lega.");
-    router.push("/leagues");
-    router.refresh();
+    try {
+      const response = await fetch(`/api/leagues/${league.id}/leave`, { method: "POST" });
+      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) return toast.error(result.message ?? "Operazione non riuscita.");
+      toast.success("Hai lasciato la lega.");
+      router.push("/leagues");
+      router.refresh();
+    } catch {
+      toast.error("Connessione non disponibile. Riprova.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   async function removeLeague() {
     setWorking(true);
-    const response = await fetch(`/api/leagues/${league.id}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmation }),
-    });
-    const result = (await response.json()) as { message?: string };
-    setWorking(false);
-    if (!response.ok) return toast.error(result.message ?? "Eliminazione non riuscita.");
-    toast.success("Lega eliminata.");
-    router.push("/leagues");
-    router.refresh();
+    try {
+      const response = await fetch(`/api/leagues/${league.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) return toast.error(result.message ?? "Eliminazione non riuscita.");
+      toast.success("Lega eliminata.");
+      router.push("/leagues");
+      router.refresh();
+    } catch {
+      toast.error("Connessione non disponibile. Riprova.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   return (

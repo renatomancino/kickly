@@ -42,7 +42,7 @@ export function LeaguePageView({ league, currentUserId, matches, leaderboards }:
           <LeagueLogo className="size-24 rounded-3xl ring-1 ring-white/10" name={league.name} url={league.logoUrl} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{league.footballFormat.replace("v", " vs ")}</Badge><Badge variant="outline">{league.visibility === "private" ? <LockKeyhole /> : <Shield />}{league.visibility === "private" ? "Privata" : "Pubblica"}</Badge><RoleBadge role={league.currentUserRole} /></div>
-            <h1 className="mt-3 truncate text-3xl font-black tracking-tight sm:text-4xl">{league.name}</h1>
+            <h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl">{league.name}</h1>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"><span className="flex items-center gap-1.5"><MapPin className="size-4 text-primary" />{league.city}, {league.country}</span><span className="flex items-center gap-1.5"><UsersRound className="size-4 text-primary" />{league.memberCount}/{league.maxMembers} membri</span></div>
           </div>
           {canInvite ? <InviteDialog footballFormat={league.footballFormat} initialCode={league.inviteCode} leagueId={league.id} leagueName={league.name} role={league.currentUserRole} /> : null}
@@ -50,7 +50,7 @@ export function LeaguePageView({ league, currentUserId, matches, leaderboards }:
       </header>
 
       <Tabs className="mt-7" defaultValue="home">
-        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0"><TabsList className="w-max min-w-full justify-start"><TabsTrigger value="home">Home</TabsTrigger><TabsTrigger value="matches">Partite</TabsTrigger><TabsTrigger value="rankings">Classifiche</TabsTrigger><TabsTrigger value="players">Giocatori</TabsTrigger><TabsTrigger value="stats">Statistiche</TabsTrigger><TabsTrigger value="info">Info</TabsTrigger></TabsList></div>
+        <TabsList aria-label="Sezioni della lega" className="grid h-auto! w-full grid-cols-3 gap-1 p-1 sm:inline-flex sm:h-8! sm:w-full sm:justify-start sm:gap-0 sm:p-[3px]"><TabsTrigger className="h-9 text-xs sm:h-[calc(100%-1px)] sm:text-sm" value="home">Home</TabsTrigger><TabsTrigger className="h-9 text-xs sm:h-[calc(100%-1px)] sm:text-sm" value="matches">Partite</TabsTrigger><TabsTrigger className="h-9 text-xs sm:h-[calc(100%-1px)] sm:text-sm" value="rankings">Classifiche</TabsTrigger><TabsTrigger className="h-9 text-xs sm:h-[calc(100%-1px)] sm:text-sm" value="players">Giocatori</TabsTrigger><TabsTrigger className="h-9 text-xs sm:h-[calc(100%-1px)] sm:text-sm" value="stats">Statistiche</TabsTrigger><TabsTrigger className="h-9 text-xs sm:h-[calc(100%-1px)] sm:text-sm" value="info">Info</TabsTrigger></TabsList>
 
         <TabsContent className="mt-6" value="home">
           <div className="grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
@@ -59,7 +59,7 @@ export function LeaguePageView({ league, currentUserId, matches, leaderboards }:
             <div className="lg:col-span-2"><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">Leader della lega</h2><Button onClick={() => document.querySelector<HTMLButtonElement>('[data-value=rankings]')?.click()} size="sm" variant="ghost">Vedi classifiche</Button></div><LeagueLeaderboardsView boards={leaderboards} preview /></div>
           </div>
         </TabsContent>
-        <TabsContent className="mt-6" value="matches"><div className="mb-4 flex items-end justify-between gap-3"><div><h2 className="text-xl font-bold">Partite</h2><p className="mt-1 text-sm text-muted-foreground">Prossime e passate della lega.</p></div>{canInvite ? <Button asChild size="sm"><Link href={`/matches/new?league=${league.id}`}><CalendarPlus />Crea partita</Link></Button> : null}</div><LeagueMatches canCreate={canInvite} leagueId={league.id} matches={matches} /></TabsContent>
+        <TabsContent className="mt-6 min-w-0" value="matches"><div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-xl font-bold">Partite</h2><p className="mt-1 text-sm text-muted-foreground">Prossime e passate della lega.</p></div>{canInvite ? <Button asChild size="sm"><Link href={`/matches/new?league=${league.id}`}><CalendarPlus />Crea partita</Link></Button> : null}</div><LeagueMatches canCreate={canInvite} leagueId={league.id} matches={matches} /></TabsContent>
         <TabsContent className="mt-6" value="rankings"><LeagueLeaderboardsView boards={leaderboards} /></TabsContent>
         <TabsContent className="mt-6" value="players"><div className="mb-4"><h2 className="text-xl font-bold">Giocatori</h2><p className="mt-1 text-sm text-muted-foreground">{league.memberCount} membri attivi</p></div><MembersList currentUserId={currentUserId} currentUserRole={league.currentUserRole} initialMembers={league.members} leagueId={league.id} /></TabsContent>
         <TabsContent className="mt-6" value="stats"><FeatureEmpty icon={<BarChart3 />} title="Statistiche non disponibili" body="Saranno calcolate automaticamente dopo le prime partite concluse." /></TabsContent>

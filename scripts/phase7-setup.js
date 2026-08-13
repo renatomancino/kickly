@@ -3,8 +3,6 @@
  * Configures test environment: RLS policies, test league, account roles
  */
 
-import fs from 'fs';
-
 (async () => {
   const { createClient } = await import('@supabase/supabase-js');
 
@@ -81,6 +79,10 @@ import fs from 'fs';
     try {
       // Find user by email
       const { data: users, error: findError } = await supabase.auth.admin.listUsers();
+      if (findError) {
+        console.log(`  ! Could not find ${email}:`, findError.message);
+        continue;
+      }
       const user = users?.users?.find((u) => u.email === email);
 
       if (!user) {
@@ -141,7 +143,7 @@ import fs from 'fs';
 
   try {
     // Check if we can query player_rating_history (requires RLS policy)
-    const { data: sample, error: raterError } = await supabase
+    const { error: raterError } = await supabase
       .from('player_rating_history')
       .select('id')
       .limit(0);

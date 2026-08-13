@@ -1,135 +1,109 @@
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from "next/server";
+import webpush from "web-push";
+import { z } from "zod";
 
-const webpush = require('web-push');
+import { getCurrentUser } from "@/lib/auth";
+import { asciiJsonStringify } from "@/lib/push-payload";
+import { createClient } from "@/lib/supabase/server";
+
+const testPushSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  body: z.string().trim().min(1).max(500),
+  url: z.string().trim().max(500).refine((value) => value.startsWith("/") && !value.startsWith("//")),
+});
 
 export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { title, body, url } = await request.json();
+    const parsed = testPushSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "INVALID_TEST_PAYLOAD" }, { status: 400 });
 
     const supabase = await createClient();
+    const { data: subscriptions, error: subscriptionError } = await supabase
+      .from("push_subscriptions")
+      .select("endpoint, p256dh, auth")
+      .eq("user_id", user.id)
+      .is("disabled_at", null);
 
-    // Fetch user's subscriptions
-    const { data: subscriptions, error: subError } = await supabase
-      .from('push_subscriptions')
-      .select('*')
-      .eq('user_id', user.id);
-
-    if (subError || !subscriptions || subscriptions.length === 0) {
+    if (subscriptionError || !subscriptions?.length) {
       return NextResponse.json(
-        { error: 'NO_ACTIVE_IOS_SUBSCRIPTION', status: 'NO_ACTIVE_IOS_SUBSCRIPTION' },
-        { status: 404 }
+        { error: "NO_ACTIVE_IOS_SUBSCRIPTION", status: "NO_ACTIVE_IOS_SUBSCRIPTION" },
+        { status: 404 },
       );
     }
 
-    // Get VAPID keys from Vault
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
     const vapidSubject = process.env.VAPID_SUBJECT;
-
     if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) {
       return NextResponse.json(
-        { error: 'VAPID_CONFIGURATION_ERROR', status: 'VAPID_CONFIGURATION_ERROR' },
-        { status: 500 }
+        { error: "VAPID_CONFIGURATION_ERROR", status: "VAPID_CONFIGURATION_ERROR" },
+        { status: 500 },
       );
     }
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
-    const tag = `test-${Date.now()}`;
-    const payload = JSON.stringify({
-      title,
-      body,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/badge-72x72.png',
-      data: { url },
-      tag,
+    const id = `test-${Date.now()}`;
+    const payload = asciiJsonStringify({
+      id,
+      title: parsed.data.title,
+      body: parsed.data.body,
+      link: parsed.data.url,
+      icon: "/icons/kickly-icon-192.png",
+      badge: "/icons/badge-72x72.png",
     });
 
-    // Send to each subscription and log results
-    let successCount = 0;
-    let lastStatus = 'UNKNOWN';
-    let lastError = null;
-
-    for (const subscription of subscriptions) {
-      try {
-        const subscriptionObj = {
-          endpoint: subscription.endpoint,
-          keys: {
-            p256dh: subscription.p256dh,
-            auth: subscription.auth,
-          },
-        };
-
-        const response = await webpush.sendNotification(subscriptionObj, payload);
-
-        lastStatus = 'PROVIDER_SENT_AWAITING_DEVICE_CONFIRMATION';
-        successCount++;
-
-        // Log delivery attempt
-        await supabase.from('push_delivery_logs').insert({
-          user_id: user.id,
-          subscription_id: subscription.endpoint,
-          notification_type: 'test_push',
-          status: 'sent',
-          provider_status: response.status,
-          created_at: new Date().toISOString(),
-        });
-      } catch (error: any) {
-        lastError = error;
-        console.error('Error sending to subscription:', error);
-
-        // Handle specific HTTP status codes
-        if (error.statusCode === 404 || error.statusCode === 410) {
-          // Subscription expired or invalid
-          await supabase
-            .from('push_subscriptions')
-            .delete()
-            .eq('endpoint', subscription.endpoint);
-          lastStatus = 'NO_ACTIVE_IOS_SUBSCRIPTION';
-        } else if (error.statusCode === 401 || error.statusCode === 403) {
-          lastStatus = 'VAPID_CONFIGURATION_ERROR';
-        } else if (error.statusCode === 429 || error.statusCode >= 500) {
-          lastStatus = 'PROVIDER_FAILED';
+    const results = await Promise.all(
+      subscriptions.map(async (subscription) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: subscription.endpoint,
+              keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+            },
+            payload,
+            { TTL: 60 * 60, urgency: "high" },
+          );
+          return { sent: true, status: "PROVIDER_SENT_AWAITING_DEVICE_CONFIRMATION" } as const;
+        } catch (error) {
+          const statusCode = webPushStatus(error);
+          if (statusCode === 404 || statusCode === 410) {
+            await supabase.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+            return { sent: false, status: "NO_ACTIVE_IOS_SUBSCRIPTION" } as const;
+          }
+          if (statusCode === 401 || statusCode === 403) {
+            return { sent: false, status: "VAPID_CONFIGURATION_ERROR" } as const;
+          }
+          return { sent: false, status: "PROVIDER_FAILED" } as const;
         }
+      }),
+    );
 
-        // Log failed attempt
-        await supabase.from('push_delivery_logs').insert({
-          user_id: user.id,
-          subscription_id: subscription.endpoint,
-          notification_type: 'test_push',
-          status: 'failed',
-          provider_status: error.statusCode || 0,
-          error: error.message,
-          created_at: new Date().toISOString(),
-        });
-      }
-    }
-
-    if (successCount === 0) {
-      return NextResponse.json(
-        { error: lastStatus, status: lastStatus },
-        { status: 400 }
-      );
+    const successCount = results.filter((result) => result.sent).length;
+    if (!successCount) {
+      const status = results[0]?.status ?? "PROVIDER_FAILED";
+      return NextResponse.json({ error: status, status }, { status: 400 });
     }
 
     return NextResponse.json({
       success: true,
-      status: lastStatus,
+      status: "PROVIDER_SENT_AWAITING_DEVICE_CONFIRMATION",
       subscriptionsProcessed: subscriptions.length,
       successCount,
     });
-  } catch (err) {
-    console.error('Send test push error:', err);
+  } catch (error) {
+    console.error("Send test push error:", error);
     return NextResponse.json(
-      { error: 'PROVIDER_FAILED', status: 'PROVIDER_FAILED' },
-      { status: 500 }
+      { error: "PROVIDER_FAILED", status: "PROVIDER_FAILED" },
+      { status: 500 },
     );
   }
+}
+
+function webPushStatus(error: unknown) {
+  if (!error || typeof error !== "object" || !("statusCode" in error)) return 0;
+  const statusCode = Number((error as { statusCode?: unknown }).statusCode);
+  return Number.isFinite(statusCode) ? statusCode : 0;
 }

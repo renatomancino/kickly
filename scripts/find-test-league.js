@@ -2,8 +2,6 @@
  * Find existing test league or use the first available league
  */
 
-import fs from 'fs';
-
 (async () => {
   const { createClient } = await import('@supabase/supabase-js');
 

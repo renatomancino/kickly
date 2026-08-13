@@ -9,5 +9,5 @@ export const metadata: Metadata = { title: "Notifiche" };
 export default async function NotificationsPage() {
   const user = await requireUser();
   const [items, preferences] = await Promise.all([getNotifications(user.id), getNotificationPreferences(user.id)]);
-  return <><NotificationCenter initialItems={items} />{!preferences.push_enabled ? <div className="pb-8"><PushSettings initiallyEnabled={false} /></div> : null}</>;
+  return <><NotificationCenter initialItems={items} /><div className="pb-8"><PushSettings initiallyEnabled={preferences.push_enabled} /></div></>;
 }

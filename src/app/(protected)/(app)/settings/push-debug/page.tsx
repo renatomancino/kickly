@@ -4,6 +4,13 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  enablePushOnDevice,
+  getDevicePushSubscription,
+  isStandaloneApp,
+  pushErrorMessage,
+  supportsWebPush,
+} from '@/features/notifications/push-client';
 
 interface DiagnosticState {
   pwaStandalone: boolean;
@@ -44,9 +51,7 @@ export default function PushDebugPage() {
     async function runDiagnostics() {
       try {
         // Check PWA standalone
-        const isStandalone =
-          window.matchMedia('(display-mode: standalone)').matches ||
-          (window.navigator as any).standalone === true;
+        const isStandalone = isStandaloneApp();
 
         // Check Service Worker
         const swSupported = 'serviceWorker' in navigator;
@@ -64,10 +69,10 @@ export default function PushDebugPage() {
         }
 
         // Check Push Manager
-        const pushSupported = swSupported && 'PushManager' in window;
+        const pushSupported = supportsWebPush();
 
         // Check Notification permission
-        const permission = Notification.permission;
+        const permission = 'Notification' in window ? Notification.permission : null;
 
         // Check current subscription
         let subscriptionPresent = false;
@@ -109,7 +114,7 @@ export default function PushDebugPage() {
           sanitizedError: null,
           loading: false,
         });
-      } catch (err) {
+      } catch {
         setDiagnostics((prev) => ({
           ...prev,
           sanitizedError: 'Errore durante la diagnosi',
@@ -123,62 +128,26 @@ export default function PushDebugPage() {
 
   // Enable notifications
   async function handleEnableNotifications() {
-    try {
-      const permission = await Notification.requestPermission();
-      setDiagnostics((prev) => ({
-        ...prev,
-        notificationPermission: permission,
-      }));
-
-      if (permission === 'granted') {
-        // Try to subscribe
-        await handleRecreateSubscription();
-      }
-    } catch (err) {
-      setDiagnostics((prev) => ({
-        ...prev,
-        sanitizedError: 'Errore nell\'abilitazione delle notifiche',
-      }));
-    }
+    await handleRecreateSubscription();
   }
 
   // Recreate subscription
   async function handleRecreateSubscription() {
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const publicKeyResponse = await fetch('/api/notifications/vapid-public-key');
-      const { publicKey: publicKeyBase64 } = await publicKeyResponse.json();
-      
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: publicKeyBase64,
-      });
-
-      // Save to database
-      const response = await fetch('/api/notifications/push-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: subscription.toJSON() }),
-      });
-
-      if (response.ok) {
-        setDiagnostics((prev) => ({
-          ...prev,
-          subscriptionPresent: true,
-          subscriptionInDatabase: true,
-          sanitizedError: null,
-        }));
-      } else {
-        setDiagnostics((prev) => ({
-          ...prev,
-          sanitizedError: 'Errore nel salvataggio della subscription',
-        }));
-      }
-    } catch (err) {
-      console.error('Error recreating subscription:', err);
+      await enablePushOnDevice();
+      const subscription = await getDevicePushSubscription();
       setDiagnostics((prev) => ({
         ...prev,
-        sanitizedError: 'Errore nella ricreazione della subscription',
+        notificationPermission: Notification.permission,
+        subscriptionPresent: Boolean(subscription),
+        subscriptionInDatabase: Boolean(subscription),
+        sanitizedError: null,
+      }));
+    } catch (error) {
+      console.error('Error recreating subscription:', error);
+      setDiagnostics((prev) => ({
+        ...prev,
+        sanitizedError: pushErrorMessage(error),
       }));
     }
   }
@@ -193,8 +162,8 @@ export default function PushDebugPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: 'Test notifiche Kickly',
-          body: 'Se leggi questo messaggio, le notifiche push funzionano.',
+          title: 'Test notifiche Kickly: città e attività',
+          body: 'Perché Kickly è pronta: accenti ed emoji funzionano ⚽',
           url: '/settings/push-debug?test=success',
         }),
       });

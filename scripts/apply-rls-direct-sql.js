@@ -10,7 +10,7 @@ import fs from 'fs';
   let pg;
   try {
     pg = (await import('pg')).default;
-  } catch (e) {
+  } catch {
     console.log('❌ pg library not found. Installing...\n');
     console.log('Run: npm install pg');
     console.log('\nThen run this script again.');

@@ -5,8 +5,6 @@
 import fs from 'fs';
 
 (async () => {
-  const { createClient } = await import('@supabase/supabase-js');
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -14,8 +12,6 @@ import fs from 'fs';
     console.error('Missing env vars');
     process.exit(1);
   }
-
-  const supabase = createClient(url, serviceKey);
 
   console.log('🔐 Applying RLS Migration Fixes\n');
 
@@ -27,9 +23,6 @@ import fs from 'fs';
     .split(';')
     .map(s => s.trim())
     .filter(s => s && !s.startsWith('--'));
-
-  let successCount = 0;
-  let errorCount = 0;
 
   for (const statement of statements) {
     if (!statement) continue;
@@ -45,7 +38,6 @@ import fs from 'fs';
       // 2. supabase db push command
     } catch (e) {
       console.error(`Error: ${e.message}`);
-      errorCount++;
     }
   }
 
