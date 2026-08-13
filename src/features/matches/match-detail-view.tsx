@@ -39,6 +39,7 @@ import type { AttendanceStatus, MatchStatus } from "@/types/database";
 
 import { mapsUrl, matchDateLabel, matchStatusLabel, matchTimeLabel } from "./format";
 import type { MatchDetail, MatchParticipantView } from "./types";
+import { MatchLineupBoard } from "./match-lineup-board";
 import { PostGameSummary } from "./post-game-summary";
 
 interface RsvpResult {
@@ -62,24 +63,43 @@ export function MatchDetailView({ match }: { match: MatchDetail }) {
   const spots = Math.max(0, match.maxPlayers - going);
 
   async function setRsvp(next: "going" | "maybe" | "not_going") {
+    const previous = { response, going, status, waitlistPosition };
+    const predictedResponse: AttendanceStatus = next === "going" && response !== "going" && spots === 0
+      ? "waitlist"
+      : next;
+    const wasGoing = response === "going";
+    const willBeGoing = predictedResponse === "going";
+
     setPending(next);
-    const request = await fetch(`/api/matches/${match.id}/rsvp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ response: next }),
-    });
-    const result = (await request.json()) as RsvpResult;
-    setPending(null);
-    if (!request.ok) {
-      toast.error(result.message ?? "Risposta non salvata.");
-      return;
+    setResponse(predictedResponse);
+    setGoing((current) => Math.max(0, current + Number(willBeGoing) - Number(wasGoing)));
+    setWaitlistPosition(predictedResponse === "waitlist" ? waitlistPosition ?? 1 : null);
+
+    try {
+      const request = await fetch(`/api/matches/${match.id}/rsvp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response: next }),
+      });
+      const result = (await request.json().catch(() => ({}))) as Partial<RsvpResult>;
+      if (!request.ok || !result.actual_response || result.going_count === undefined || !result.match_status) {
+        throw new Error(result.message ?? "Risposta non salvata.");
+      }
+      setResponse(result.actual_response);
+      setGoing(Number(result.going_count));
+      setStatus(result.match_status);
+      setWaitlistPosition(result.waitlist_position ? Number(result.waitlist_position) : null);
+      toast.success(result.actual_response === "waitlist" ? "Sei in lista d’attesa." : "Risposta aggiornata.");
+      router.refresh();
+    } catch (error) {
+      setResponse(previous.response);
+      setGoing(previous.going);
+      setStatus(previous.status);
+      setWaitlistPosition(previous.waitlistPosition);
+      toast.error(error instanceof Error ? error.message : "Risposta non salvata.");
+    } finally {
+      setPending(null);
     }
-    setResponse(result.actual_response);
-    setGoing(Number(result.going_count));
-    setStatus(result.match_status);
-    setWaitlistPosition(result.waitlist_position ? Number(result.waitlist_position) : null);
-    toast.success(result.actual_response === "waitlist" ? "Sei in lista d’attesa." : "Risposta aggiornata.");
-    router.refresh();
   }
 
   async function adminAction(action: "cancel" | "close" | "reopen") {
@@ -157,6 +177,16 @@ export function MatchDetailView({ match }: { match: MatchDetail }) {
       </section>
 
       {status === "completed" ? <PostGameSummary match={match} /> : null}
+      {match.isLeagueMember && status !== "completed" ? <MatchLineupBoard
+        canManage={canManage}
+        currentResponse={response}
+        currentUserId={match.currentUserId}
+        format={match.footballFormat}
+        initialLineup={match.lineup}
+        matchId={match.id}
+        participants={match.participants}
+        status={status}
+      /> : null}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
         <div className="space-y-5">

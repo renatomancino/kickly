@@ -19,7 +19,7 @@ export function PostGameManager({ match }: { match: MatchDetail }) {
   const router = useRouter();
   const confirmed = useMemo(() => match.participants.filter((player) => player.response === "going"), [match.participants]);
   const savedA = match.postGame?.teams.find((team) => team.teamNumber === 1)?.playerIds;
-  const [teamA, setTeamA] = useState<string[]>(savedA ?? confirmed.filter((_, index) => index % 2 === 0).map((player) => player.userId));
+  const [teamA, setTeamA] = useState<string[]>(() => savedA ?? preMatchTeamA(match, confirmed));
   const [scoreA, setScoreA] = useState(match.postGame?.teamAScore ?? 0);
   const [scoreB, setScoreB] = useState(match.postGame?.teamBScore ?? 0);
   const [pending, setPending] = useState(false);
@@ -94,3 +94,15 @@ function Player({ player }: { player: MatchParticipantView }) { return <div clas
 function ScoreInput({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) { return <label className="text-center"><span className="text-xs font-bold uppercase text-muted-foreground">{label}</span><Input className="mt-2 h-20 text-center text-4xl font-black" max={99} min={0} onChange={(event) => onChange(Number(event.target.value))} type="number" value={value} /></label>; }
 function Counter({ label, value, onChange }: { label: string; value: number; onChange: (delta: number) => void }) { return <div className="col-span-2 flex items-center justify-between gap-2 rounded-xl bg-background/60 p-1 sm:col-span-1"><span className="ps-2 text-xs font-bold uppercase text-muted-foreground sm:hidden">{label}</span><Button aria-label={`Riduci ${label}`} onClick={() => onChange(-1)} size="icon-sm" type="button" variant="ghost"><Minus /></Button><div className="min-w-10 text-center"><p className="text-lg font-black">{value}</p><p className="hidden text-[9px] text-muted-foreground uppercase sm:block">{label}</p></div><Button aria-label={`Aumenta ${label}`} onClick={() => onChange(1)} size="icon-sm" type="button" variant="ghost"><Plus /></Button></div>; }
 function average(ids: string[], players: MatchParticipantView[]) { return ids.length ? Math.round(ids.reduce((sum, id) => sum + (players.find((player) => player.userId === id)?.overall ?? 70), 0) / ids.length) : 0; }
+function preMatchTeamA(match: MatchDetail, confirmed: MatchParticipantView[]) {
+  const assignedA = match.lineup.players.filter((player) => player.teamNumber === 1).map((player) => player.userId);
+  const assigned = new Set(match.lineup.players.map((player) => player.userId));
+  if (!assigned.size) return confirmed.filter((_, index) => index % 2 === 0).map((player) => player.userId);
+  const teamA = [...assignedA];
+  let teamBSize = match.lineup.players.filter((player) => player.teamNumber === 2).length;
+  confirmed.filter((player) => !assigned.has(player.userId)).forEach((player) => {
+    if (teamA.length <= teamBSize) teamA.push(player.userId);
+    else teamBSize += 1;
+  });
+  return teamA;
+}

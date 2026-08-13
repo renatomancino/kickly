@@ -18,13 +18,18 @@ export default async function LoggedInAppLayout({ children }: { children: ReactN
     if (user) {
       userId = user.id;
       const supabase = await createClient();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("onboarding_completed")
-        .eq("id", user.id)
-        .maybeSingle();
+      const [{ data: profile }, nextManagedLeagues, nextUnreadNotifications] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("id", user.id)
+          .maybeSingle(),
+        getManagedLeagues(),
+        getUnreadNotificationCount(user.id),
+      ]);
       if (!profile?.onboarding_completed) redirect("/onboarding");
-      [managedLeagues, unreadNotifications] = await Promise.all([getManagedLeagues(), getUnreadNotificationCount(user.id)]);
+      managedLeagues = nextManagedLeagues;
+      unreadNotifications = nextUnreadNotifications;
     }
   }
   return <AppShell managedLeagues={managedLeagues} unreadNotifications={unreadNotifications} userId={userId}>{children}</AppShell>;

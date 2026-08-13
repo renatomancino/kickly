@@ -131,7 +131,17 @@ export function MatchForm({
         <Field error={errors.city?.message} label="Città"><Input className="h-11" {...register("city", { required: "Inserisci la città." })} /></Field>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
-        <ControlledSelect control={control} label="Formato" name="footballFormat" options={footballFormats.map((value) => ({ value, label: value.replace("v", " vs ") }))} />
+        <Field label="Formato">
+          <Controller control={control} name="footballFormat" render={({ field }) => (
+            <Select onValueChange={(value: MatchFormat) => {
+              field.onChange(value);
+              setValue("maxPlayers", formatPlayers(value));
+            }} value={field.value}>
+              <SelectTrigger className="h-11 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>{footballFormats.map((value) => <SelectItem key={value} value={value}>{value.replace("v", " vs ")}</SelectItem>)}</SelectContent>
+            </Select>
+          )} />
+        </Field>
         <Field error={errors.maxPlayers?.message} label="Massimo giocatori">
           <Input className="h-11" max={30} min={4} type="number" {...register("maxPlayers", { valueAsNumber: true, min: { value: 4, message: "Minimo 4 giocatori." }, max: { value: 30, message: "Massimo 30 giocatori." } })} />
         </Field>
@@ -156,7 +166,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 
 function ControlledSelect({ control, name, label, options }: {
   control: ReturnType<typeof useForm<FormValues>>["control"];
-  name: "footballFormat" | "visibility";
+  name: "visibility";
   label: string;
   options: { value: string; label: string }[];
 }) {

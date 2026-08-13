@@ -30,135 +30,75 @@ interface LeagueRow {
   invite_code: string;
 }
 
-interface MembershipRow {
+interface LeagueSummaryRpcRow extends LeagueRow {
+  current_user_role: LeagueRole;
+  member_count: number;
+}
+
+interface LeagueMemberRpcRow {
   id: string;
-  league_id: string;
   user_id: string;
   role: LeagueRole;
   joined_at: string;
-}
-
-interface ProfilePreviewRow {
-  id: string;
   first_name: string | null;
   last_name: string | null;
-  username: string;
+  username: string | null;
   avatar_path: string | null;
-  primary_position: FootballRole | null;
+  football_role: FootballRole | null;
+}
+
+interface LeagueDetailRpcRow extends LeagueRow {
+  current_user_role: LeagueRole;
+  members: LeagueMemberRpcRow[];
 }
 
 export const getUserLeagues = cache(async (): Promise<LeagueSummary[]> => {
-  const user = await requireUser();
+  await requireUser();
   const supabase = await createClient();
-  const { data: memberships, error: membershipError } = await supabase
-    .from("league_members")
-    .select("id, league_id, user_id, role, joined_at")
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .order("joined_at", { ascending: false });
+  const { data, error } = await supabase.rpc("get_user_league_summaries");
+  if (error) throw new Error("Impossibile caricare le leghe.");
 
-  if (membershipError) throw new Error("Impossibile caricare le leghe.");
-  const ownMemberships = (memberships ?? []) as MembershipRow[];
-  if (!ownMemberships.length) return [];
-
-  const leagueIds = ownMemberships.map((membership) => membership.league_id);
-  const [{ data: leagues, error: leaguesError }, { data: memberRows }] =
-    await Promise.all([
-      supabase
-        .from("leagues")
-        .select(
-          "id, owner_id, name, slug, description, logo_url, city, country, visibility, football_format, max_members, invite_code",
-        )
-        .in("id", leagueIds),
-      supabase
-        .from("league_members")
-        .select("league_id")
-        .in("league_id", leagueIds)
-        .eq("status", "active"),
-    ]);
-
-  if (leaguesError) throw new Error("Impossibile caricare le leghe.");
-  const roleByLeague = new Map(
-    ownMemberships.map((membership) => [membership.league_id, membership.role]),
-  );
-  const countByLeague = new Map<string, number>();
-  (memberRows ?? []).forEach((row: { league_id: string }) => {
-    countByLeague.set(row.league_id, (countByLeague.get(row.league_id) ?? 0) + 1);
-  });
-
-  return ((leagues ?? []) as LeagueRow[])
-    .map((league) => mapLeagueSummary(league, roleByLeague.get(league.id) ?? "member", countByLeague.get(league.id) ?? 0))
+  return ((data ?? []) as LeagueSummaryRpcRow[])
+    .map((league) => mapLeagueSummary(
+      league,
+      league.current_user_role,
+      Number(league.member_count),
+    ))
     .sort((a, b) => a.name.localeCompare(b.name, "it"));
 });
 
 export const getLeagueBySlug = cache(
   async (slug: string): Promise<LeagueDetail | null> => {
-    const user = await requireUser();
+    await requireUser();
     const supabase = await createClient();
-    const { data: leagueData, error: leagueError } = await supabase
-      .from("leagues")
-      .select(
-        "id, owner_id, name, slug, description, logo_url, city, country, visibility, football_format, max_members, invite_code",
-      )
-      .eq("slug", slug)
+    const { data, error } = await supabase
+      .rpc("get_league_detail", { target_slug: slug })
       .maybeSingle();
 
-    if (leagueError || !leagueData) return null;
-    const league = leagueData as LeagueRow;
-    const { data: currentMembership } = await supabase
-      .from("league_members")
-      .select("role")
-      .eq("league_id", league.id)
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-    if (!currentMembership) return null;
-
-    const { data: memberships, error: membersError } = await supabase
-      .from("league_members")
-      .select("id, league_id, user_id, role, joined_at")
-      .eq("league_id", league.id)
-      .eq("status", "active")
-      .order("joined_at");
-    if (membersError) throw new Error("Impossibile caricare i membri.");
-
-    const activeMemberships = (memberships ?? []) as MembershipRow[];
-    const profileIds = activeMemberships.map((membership) => membership.user_id);
-    const { data: profiles, error: profilesError } = profileIds.length
-      ? await supabase
-          .from("profiles")
-          .select("id, first_name, last_name, username, avatar_path, primary_position")
-          .in("id", profileIds)
-      : { data: [], error: null };
-    if (profilesError) throw new Error("Impossibile caricare i profili.");
-
-    const profileById = new Map(
-      ((profiles ?? []) as ProfilePreviewRow[]).map((profile) => [profile.id, profile]),
-    );
-    const members: LeagueMember[] = activeMemberships.map((membership) => {
-      const profile = profileById.get(membership.user_id);
-      const avatarUrl = profile?.avatar_path
-        ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
+    if (error || !data) return null;
+    const league = data as LeagueDetailRpcRow;
+    const members: LeagueMember[] = league.members.map((member) => {
+      const avatarUrl = member.avatar_path
+        ? supabase.storage.from("avatars").getPublicUrl(member.avatar_path).data.publicUrl
         : null;
       return {
-        id: membership.id,
-        userId: membership.user_id,
-        firstName: profile?.first_name ?? null,
-        lastName: profile?.last_name ?? null,
-        username: profile?.username ?? "giocatore",
+        id: member.id,
+        userId: member.user_id,
+        firstName: member.first_name,
+        lastName: member.last_name,
+        username: member.username ?? "giocatore",
         avatarUrl,
-        footballRole: profile?.primary_position ?? null,
-        leagueRole: membership.role,
-        joinedAt: membership.joined_at,
+        footballRole: member.football_role,
+        leagueRole: member.role,
+        joinedAt: member.joined_at,
       };
     });
 
-    const currentRole = (currentMembership as { role: LeagueRole }).role;
     return {
-      ...mapLeagueSummary(league, currentRole, members.length),
+      ...mapLeagueSummary(league, league.current_user_role, members.length),
       ownerId: league.owner_id,
       inviteCode: league.invite_code,
-      members: members.sort((a, b) => roleOrder(a.leagueRole) - roleOrder(b.leagueRole)),
+      members,
     };
   },
 );
@@ -217,8 +157,4 @@ function mapLeagueSummary(
     memberCount,
     currentUserRole,
   };
-}
-
-function roleOrder(role: LeagueRole) {
-  return role === "owner" ? 0 : role === "admin" ? 1 : 2;
 }

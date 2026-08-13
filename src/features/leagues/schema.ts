@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const footballFormats = ["5v5", "7v7", "8v8", "11v11"] as const;
+export const footballFormats = ["5v5", "7v7", "8v8", "10v10", "11v11"] as const;
 
 export const leagueSchema = z.object({
   name: z.string().trim().min(3, "Inserisci almeno 3 caratteri.").max(80),

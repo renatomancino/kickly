@@ -17,9 +17,11 @@ import type {
 import type {
   ManagedLeague,
   MatchDetail,
+  MatchLineup,
   MatchParticipantView,
   MatchSummary,
 } from "./types";
+import { defaultFormation } from "./lineup-config";
 
 interface MatchRow {
   id: string;
@@ -64,6 +66,34 @@ interface ParticipantProfileRow {
   overall: number;
 }
 
+interface LineupTeamRow {
+  team_number: 1 | 2;
+  formation: string;
+  captain_user_id: string | null;
+}
+
+interface LineupPlayerRow {
+  user_id: string;
+  team_number: 1 | 2;
+  slot_key: string;
+}
+
+interface LeagueMatchSummaryRpcRow {
+  id: string;
+  league_id: string;
+  title: string;
+  starts_at: string;
+  location_name: string;
+  city: string;
+  football_format: MatchFormat;
+  max_players: number;
+  visibility: MatchVisibility;
+  status: MatchStatus;
+  registration_closed_at: string | null;
+  going_count: number;
+  current_response: AttendanceStatus | null;
+}
+
 const matchSelect =
   "id, league_id, created_by, title, description, starts_at, location_name, address, city, latitude, longitude, football_format, max_players, cost_total, visibility, status, registration_closed_at, team_a_score, team_b_score, completed_at, mvp_voting_ends_at, mvp_finalized_at";
 
@@ -103,15 +133,29 @@ export const getUserMatches = cache(async (): Promise<MatchSummary[]> => {
 });
 
 export async function getLeagueMatches(league: LeagueSummary): Promise<MatchSummary[]> {
-  const user = await requireUser();
+  await requireUser();
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("matches")
-    .select(matchSelect)
-    .eq("league_id", league.id)
-    .order("starts_at", { ascending: true });
+    .rpc("get_league_match_summaries", { target_league: league.id });
   if (error) throw new Error("Impossibile caricare le partite della lega.");
-  return hydrateSummaries((data ?? []) as MatchRow[], [league], user.id, new Set([league.id]));
+  return ((data ?? []) as LeagueMatchSummaryRpcRow[]).map((match) => ({
+    id: match.id,
+    leagueId: match.league_id,
+    leagueName: league.name,
+    leagueSlug: league.slug,
+    title: match.title,
+    startsAt: match.starts_at,
+    locationName: match.location_name,
+    city: match.city,
+    footballFormat: match.football_format,
+    maxPlayers: Number(match.max_players),
+    goingCount: Number(match.going_count),
+    status: match.status,
+    visibility: match.visibility,
+    registrationClosedAt: match.registration_closed_at,
+    currentResponse: match.current_response,
+    isLeagueMember: true,
+  }));
 }
 
 export const getMatchById = cache(async (id: string): Promise<MatchDetail | null> => {
@@ -125,7 +169,13 @@ export const getMatchById = cache(async (id: string): Promise<MatchDetail | null
   if (error || !data) return null;
   const match = data as MatchRow;
 
-  const [{ data: leagueData }, { data: membership }, { data: participantData }] = await Promise.all([
+  const [
+    { data: leagueData },
+    { data: membership },
+    { data: participantData },
+    { data: lineupTeamData },
+    { data: lineupPlayerData },
+  ] = await Promise.all([
     supabase.from("leagues").select("id, name, slug").eq("id", match.league_id).maybeSingle(),
     supabase
       .from("league_members")
@@ -139,6 +189,15 @@ export const getMatchById = cache(async (id: string): Promise<MatchDetail | null
       .select("id, match_id, user_id, response, joined_at")
       .eq("match_id", match.id)
       .order("joined_at", { ascending: true }),
+    supabase
+      .from("match_lineup_teams")
+      .select("team_number, formation, captain_user_id")
+      .eq("match_id", match.id)
+      .order("team_number"),
+    supabase
+      .from("match_lineup_players")
+      .select("user_id, team_number, slot_key")
+      .eq("match_id", match.id),
   ]);
   if (!leagueData) return null;
   const isLeagueMember = Boolean(membership);
@@ -176,6 +235,7 @@ export const getMatchById = cache(async (id: string): Promise<MatchDetail | null
   const postGame = isLeagueMember && match.status === "completed" && match.completed_at && match.team_a_score !== null && match.team_b_score !== null
     ? await loadPostGame(supabase, match, user.id)
     : null;
+  const lineup = mapLineup(match.football_format, lineupTeamData, lineupPlayerData);
 
   return {
     ...mapSummary(match, league.name, league.slug, participants, currentResponse, isLeagueMember),
@@ -188,9 +248,34 @@ export const getMatchById = cache(async (id: string): Promise<MatchDetail | null
     costTotal: match.cost_total === null ? null : Number(match.cost_total),
     currentUserRole: membership ? (membership as { role: LeagueRole }).role : null,
     participants: participantViews,
+    lineup,
     postGame,
   };
 });
+
+function mapLineup(
+  format: MatchFormat,
+  teamData: unknown[] | null,
+  playerData: unknown[] | null,
+): MatchLineup {
+  const rows = (teamData ?? []) as LineupTeamRow[];
+  const teams = ([1, 2] as const).map((teamNumber) => {
+    const row = rows.find((team) => team.team_number === teamNumber);
+    return {
+      teamNumber,
+      formation: row?.formation ?? defaultFormation[format],
+      captainUserId: row?.captain_user_id ?? null,
+    };
+  });
+  return {
+    teams,
+    players: ((playerData ?? []) as LineupPlayerRow[]).map((player) => ({
+      userId: player.user_id,
+      teamNumber: player.team_number,
+      slotKey: player.slot_key,
+    })),
+  };
+}
 
 async function loadPostGame(
   supabase: Awaited<ReturnType<typeof createClient>>,

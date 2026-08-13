@@ -68,6 +68,23 @@ export interface MatchTeamView {
   playerIds: string[];
 }
 
+export interface MatchLineupTeam {
+  teamNumber: 1 | 2;
+  formation: string;
+  captainUserId: string | null;
+}
+
+export interface MatchLineupPlayer {
+  userId: string;
+  teamNumber: 1 | 2;
+  slotKey: string;
+}
+
+export interface MatchLineup {
+  teams: MatchLineupTeam[];
+  players: MatchLineupPlayer[];
+}
+
 export interface MatchPostGame {
   teamAScore: number;
   teamBScore: number;
@@ -90,6 +107,7 @@ export interface MatchDetail extends MatchSummary {
   costTotal: number | null;
   currentUserRole: LeagueRole | null;
   participants: MatchParticipantView[];
+  lineup: MatchLineup;
   postGame: MatchPostGame | null;
 }
 

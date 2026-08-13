@@ -15,8 +15,9 @@ export function NotificationRuntime({ userId, unread }: { userId: string; unread
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase.channel(`notifications:${userId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
-      const notification = payload.new as { title?: string; body?: string };
+    const channel = supabase.channel(`notifications:${userId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
+      const notification = payload.new as { user_id?: string; title?: string; body?: string };
+      if (notification.user_id !== userId) return;
       toast(repairUtf8Mojibake(notification.title ?? "Nuova notifica"), {
         description: notification.body ? repairUtf8Mojibake(notification.body) : undefined,
       });

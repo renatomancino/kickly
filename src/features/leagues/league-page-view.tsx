@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { InviteDialog } from "./invite-dialog";
 import { LeagueLogo } from "./league-logo";
+import { LeagueRealtimeSync } from "./league-realtime-sync";
 import { LeagueSettings } from "./league-settings";
 import { MembersList } from "./members-list";
 import { RoleBadge } from "./role-badge";
@@ -35,6 +36,7 @@ export function LeaguePageView({ league, currentUserId, matches, leaderboards }:
 
   return (
     <main className="py-5 sm:py-9">
+      <LeagueRealtimeSync leagueId={league.id} matchIds={matches.map((match) => match.id)} />
       <Button asChild className="-ms-2 mb-5" variant="ghost"><Link href="/leagues"><ChevronLeft />Le mie leghe</Link></Button>
       <header className="relative overflow-hidden rounded-3xl border bg-card p-5 sm:p-8">
         <div aria-hidden className="absolute -end-20 -top-24 size-72 rounded-full bg-primary/8 blur-3xl" />

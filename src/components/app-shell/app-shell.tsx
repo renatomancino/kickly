@@ -7,6 +7,7 @@ import { BottomNav } from "./bottom-nav";
 import type { ManagedLeague } from "@/features/matches/types";
 import { NotificationBell } from "@/features/notifications/notification-bell";
 import { NotificationRuntime } from "@/features/notifications/notification-runtime";
+import { PushOnboarding } from "@/features/notifications/push-onboarding";
 import { PwaRuntime } from "@/components/pwa/pwa-runtime";
 
 export function AppShell({ children, managedLeagues, userId, unreadNotifications }: { children: ReactNode; managedLeagues: ManagedLeague[]; userId?: string; unreadNotifications: number }) {
@@ -16,6 +17,7 @@ export function AppShell({ children, managedLeagues, userId, unreadNotifications
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">{children}</div>
       <BottomNav managedLeagues={managedLeagues} />
       {userId ? <NotificationRuntime unread={unreadNotifications} userId={userId} /> : null}
+      {userId ? <PushOnboarding /> : null}
       <PwaRuntime />
     </div>
   );

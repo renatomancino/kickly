@@ -20,6 +20,23 @@ export const responseSchema = z.object({
   response: z.enum(["going", "maybe", "not_going"]),
 });
 
+const lineupTeamSchema = z.union([z.literal(1), z.literal(2)]);
+
+export const lineupActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("claim"),
+    team_number: lineupTeamSchema,
+    slot_key: z.string().regex(/^(gk|p([1-9]|10))$/),
+    wants_captain: z.boolean().default(false),
+  }),
+  z.object({ action: z.literal("release") }),
+  z.object({
+    action: z.literal("formation"),
+    team_number: lineupTeamSchema,
+    formation: z.string().regex(/^\d-\d-\d$/),
+  }),
+]);
+
 export const adminStateSchema = z.object({
   action: z.enum(["cancel", "close", "reopen"]),
 });

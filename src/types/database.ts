@@ -13,7 +13,7 @@ export type FootballRole =
   | "forward";
 export type PreferredFoot = "left" | "right" | "both";
 export type SkillLevel = "beginner" | "amateur" | "intermediate" | "advanced";
-export type MatchFormat = "5v5" | "7v7" | "8v8" | "11v11";
+export type MatchFormat = "5v5" | "7v7" | "8v8" | "10v10" | "11v11";
 export type AttendanceStatus = "going" | "not_going" | "maybe" | "waitlist";
 export type MatchVisibility = "league_only" | "public";
 export type MatchStatus = "draft" | "open" | "full" | "cancelled" | "completed";
@@ -108,6 +108,22 @@ export interface Database {
         response: AttendanceStatus;
         checked_in: boolean;
         joined_at: string;
+        updated_at: string;
+      }>;
+      match_lineup_teams: BaseTable<{
+        match_id: string;
+        team_number: number;
+        formation: string;
+        captain_user_id: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      match_lineup_players: BaseTable<{
+        match_id: string;
+        user_id: string;
+        team_number: number;
+        slot_key: string;
+        created_at: string;
         updated_at: string;
       }>;
       match_teams: BaseTable<{
@@ -269,6 +285,23 @@ export interface Database {
           waitlist_position: number | null;
           match_status: MatchStatus;
         }[];
+      };
+      set_match_lineup_slot: {
+        Args: {
+          target_match: string;
+          target_team: number;
+          target_slot: string;
+          wants_captain?: boolean;
+        };
+        Returns: Json;
+      };
+      leave_match_lineup: {
+        Args: { target_match: string };
+        Returns: Json;
+      };
+      set_match_lineup_formation: {
+        Args: { target_match: string; target_team: number; target_formation: string };
+        Returns: Json;
       };
       finalize_match: {
         Args: {

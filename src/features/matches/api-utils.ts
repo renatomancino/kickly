@@ -11,6 +11,12 @@ export function matchRpcMessage(message: string) {
   if (message.includes("match_not_found")) return "Partita non trovata.";
   if (message.includes("registrations_closed")) return "Le iscrizioni sono chiuse.";
   if (message.includes("match_locked")) return "La partita non accetta più modifiche.";
+  if (message.includes("confirmed_participant_required")) return "Conferma prima la tua partecipazione alla partita.";
+  if (message.includes("lineup_slot_taken")) return "Questa posizione è stata appena occupata. Scegline un'altra.";
+  if (message.includes("lineup_captain_taken")) return "Questa squadra ha già un capitano.";
+  if (message.includes("lineup_captain_required")) return "Solo il capitano della squadra può cambiare modulo.";
+  if (message.includes("invalid_lineup_slot")) return "La posizione non è valida per questo formato.";
+  if (message.includes("invalid_lineup_formation")) return "Il modulo non è valido per questo formato.";
   if (message.includes("max_below_confirmed")) return "Il numero massimo non può essere inferiore ai partecipanti già confermati.";
   if (message.includes("invalid_max_players")) return "Il numero di giocatori deve essere compreso tra 4 e 30.";
   if (message.includes("teams_required")) return "Assegna almeno un giocatore a ciascuna squadra.";
