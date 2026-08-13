@@ -43,7 +43,7 @@ Senza configurazione Supabase l'app offre una modalità demo locale dal login.
 
 Il client mobile riusa tabelle, Storage, trigger, RLS e RPC già presenti in `../supabase` senza duplicare la logica di business nel telefono.
 
-La migrazione `20260813211721_nearby_matches_field_booking.sql` aggiunge:
+La migrazione `20260813214256_nearby_matches_field_booking.sql` aggiunge:
 
 - località italiane verificate con comune, provincia e coordinate private del profilo;
 - distanza delle partite pubbliche dalla località dell'utente;
