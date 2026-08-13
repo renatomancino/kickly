@@ -8,6 +8,10 @@ final demoProfile = UserProfile(
   avatarUrl: null,
   primaryPosition: 'midfielder',
   skillLevel: 'intermediate',
+  city: 'Milano',
+  province: 'Milano',
+  latitude: 45.4642,
+  longitude: 9.1900,
   overall: 78,
   timezone: 'Europe/Rome',
   onboardingCompleted: true,
@@ -62,6 +66,10 @@ final demoMatches = <MatchSummary>[
     registrationClosedAt: null,
     currentResponse: 'going',
     isLeagueMember: true,
+    province: 'Milano',
+    latitude: 45.4780,
+    longitude: 9.2250,
+    distanceKm: 3.1,
   ),
   MatchSummary(
     id: 'demo-match-2',
@@ -80,6 +88,10 @@ final demoMatches = <MatchSummary>[
     registrationClosedAt: null,
     currentResponse: null,
     isLeagueMember: true,
+    province: 'Milano',
+    latitude: 45.4510,
+    longitude: 9.1710,
+    distanceKm: 2.2,
   ),
 ];
 

@@ -13,19 +13,29 @@ class MatchesPage extends StatefulWidget {
 }
 
 class _MatchesPageState extends State<MatchesPage> {
-  Future<List<MatchSummary>>? _future;
-  int _filter = 0;
+  Future<(List<MatchSummary>, UserProfile?)>? _future;
+  String _filter = 'nearby';
+  double _radiusKm = 50;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= AppScope.of(context).repository.getMatches();
+    _future ??= _load();
   }
 
   Future<void> _refresh() async {
-    final next = AppScope.of(context).repository.getMatches();
+    final next = _load();
     setState(() => _future = next);
     await next;
+  }
+
+  Future<(List<MatchSummary>, UserProfile?)> _load() async {
+    final repository = AppScope.of(context).repository;
+    final values = await Future.wait<dynamic>([
+      repository.getMatches(),
+      repository.getCurrentProfile(),
+    ]);
+    return (values[0] as List<MatchSummary>, values[1] as UserProfile?);
   }
 
   @override
@@ -47,7 +57,7 @@ class _MatchesPageState extends State<MatchesPage> {
                     ),
                     const SizedBox(height: 5),
                     const Text(
-                      'Il tuo calendario Kickly.',
+                      'Trova un campo, unisciti e gioca.',
                       style: TextStyle(color: Colors.white54),
                     ),
                   ],
@@ -60,19 +70,65 @@ class _MatchesPageState extends State<MatchesPage> {
             ],
           ),
           const SizedBox(height: 22),
-          SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 0, label: Text('Tutte')),
-              ButtonSegment(value: 1, label: Text('Prossime')),
-              ButtonSegment(value: 2, label: Text('Passate')),
-            ],
-            selected: {_filter},
-            onSelectionChanged: (value) =>
-                setState(() => _filter = value.first),
-            showSelectedIcon: false,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const filters = {
+                'nearby': ('Vicino a me', Icons.near_me_outlined),
+                'going': ('Partecipo', Icons.check_circle_outline),
+                'league': ('Partite lega', Icons.shield_outlined),
+                'past': ('Passate', Icons.history),
+              };
+              final width = (constraints.maxWidth - 8) / 2;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: filters.entries.map((entry) {
+                  final selected = _filter == entry.key;
+                  return SizedBox(
+                    width: width,
+                    child: ChoiceChip(
+                      selected: selected,
+                      showCheckmark: false,
+                      avatar: Icon(entry.value.$2, size: 17),
+                      label: SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          entry.value.$1,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      onSelected: (_) => setState(() => _filter = entry.key),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
           ),
+          if (_filter == 'nearby') ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text(
+                  'Raggio',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const Spacer(),
+                ...[25.0, 50.0, 100.0].map(
+                  (radius) => Padding(
+                    padding: const EdgeInsets.only(left: 7),
+                    child: FilterChip(
+                      selected: _radiusKm == radius,
+                      showCheckmark: false,
+                      label: Text('${radius.toInt()} km'),
+                      onSelected: (_) => setState(() => _radiusKm = radius),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 18),
-          FutureBuilder<List<MatchSummary>>(
+          FutureBuilder<(List<MatchSummary>, UserProfile?)>(
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
@@ -92,22 +148,53 @@ class _MatchesPageState extends State<MatchesPage> {
                   ),
                 );
               }
-              final matches = (snapshot.data ?? const [])
-                  .where(
-                    (match) =>
-                        _filter == 0 ||
-                        (_filter == 1 ? !match.isPast : match.isPast),
-                  )
-                  .toList();
-              if (matches.isEmpty) {
-                return const EmptyState(
-                  icon: Icons.event_busy,
-                  title: 'Nessuna partita',
-                  body: 'Non ci sono partite in questa sezione.',
+              final data = snapshot.data;
+              final allMatches = data?.$1 ?? const <MatchSummary>[];
+              final profile = data?.$2;
+              if (_filter == 'nearby' &&
+                  (profile?.latitude == null || profile?.longitude == null)) {
+                return EmptyState(
+                  icon: Icons.location_off_outlined,
+                  title: 'Imposta la tua zona',
+                  body: 'Seleziona comune e provincia nel profilo per vedere le partite vicine.',
+                  action: FilledButton(
+                    onPressed: () => context.push('/profile/edit'),
+                    child: const Text('Completa località'),
+                  ),
                 );
               }
-              if (_filter == 2) {
+              final matches = allMatches.where((match) {
+                return switch (_filter) {
+                  'nearby' =>
+                    !match.isPast &&
+                        match.visibility == 'public' &&
+                        match.distanceKm != null &&
+                        match.distanceKm! <= _radiusKm,
+                  'going' => !match.isPast && match.currentResponse == 'going',
+                  'league' => !match.isPast && match.isLeagueMember,
+                  'past' => match.isPast && match.currentResponse == 'going',
+                  _ => false,
+                };
+              }).toList();
+              if (matches.isEmpty) {
+                return EmptyState(
+                  icon: Icons.event_busy,
+                  title: _filter == 'nearby'
+                      ? 'Nessuna partita nel raggio'
+                      : 'Nessuna partita',
+                  body: _filter == 'nearby'
+                      ? 'Prova ad aumentare il raggio oppure torna più tardi.'
+                      : 'Non ci sono partite in questa sezione.',
+                );
+              }
+              if (_filter == 'past') {
                 matches.sort((a, b) => b.startsAt.compareTo(a.startsAt));
+              } else if (_filter == 'nearby') {
+                matches.sort(
+                  (a, b) => (a.distanceKm ?? double.infinity).compareTo(
+                    b.distanceKm ?? double.infinity,
+                  ),
+                );
               }
               return Column(
                 children: matches

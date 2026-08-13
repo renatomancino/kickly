@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 
 import '../../app.dart';
+import '../../core/location/italian_location_service.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -21,7 +22,7 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
   final _lastName = TextEditingController();
   final _username = TextEditingController();
   final _birthDate = TextEditingController();
-  final _city = TextEditingController();
+  ItalianPlace? _place;
   String _primary = 'midfielder';
   String? _secondary;
   String _foot = 'right';
@@ -41,7 +42,18 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
         _lastName.text = p.lastName ?? '';
         _username.text = p.username.startsWith('player_') ? '' : p.username;
         _birthDate.text = p.birthDate ?? '';
-        _city.text = p.city ?? '';
+        if (p.city?.isNotEmpty == true &&
+            p.province?.isNotEmpty == true &&
+            p.latitude != null &&
+            p.longitude != null) {
+          _place = ItalianPlace(
+            city: p.city!,
+            province: p.province!,
+            latitude: p.latitude!,
+            longitude: p.longitude!,
+            displayName: '${p.city}, ${p.province}, Italia',
+          );
+        }
         _primary = p.primaryPosition ?? 'midfielder';
         _secondary = p.secondaryPosition;
         _foot = p.preferredFoot ?? 'right';
@@ -54,13 +66,7 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
 
   @override
   void dispose() {
-    for (final controller in [
-      _firstName,
-      _lastName,
-      _username,
-      _birthDate,
-      _city,
-    ]) {
+    for (final controller in [_firstName, _lastName, _username, _birthDate]) {
       controller.dispose();
     }
     super.dispose();
@@ -77,7 +83,10 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
         primaryPosition: _primary,
         skillLevel: _skill,
         birthDate: _birthDate.text,
-        city: _city.text,
+        city: _place?.city,
+        province: _place?.province,
+        latitude: _place?.latitude,
+        longitude: _place?.longitude,
         secondaryPosition: _secondary,
         preferredFoot: _foot,
         profilePublic: _public,
@@ -196,19 +205,22 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
                   const SizedBox(height: 14),
                   _field(_username, 'Username', prefix: const Text('@')),
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _field(
-                          _birthDate,
-                          'Data di nascita',
-                          hint: 'AAAA-MM-GG',
-                          optional: true,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: _field(_city, 'Città')),
-                    ],
+                  _field(
+                    _birthDate,
+                    'Data di nascita',
+                    hint: 'AAAA-MM-GG',
+                    optional: true,
+                  ),
+                  const SizedBox(height: 14),
+                  ItalianMunicipalityField(
+                    key: ValueKey(
+                      '${snapshot.data?.city}|${snapshot.data?.province}',
+                    ),
+                    initialCity: snapshot.data?.city,
+                    initialProvince: snapshot.data?.province,
+                    initialLatitude: snapshot.data?.latitude,
+                    initialLongitude: snapshot.data?.longitude,
+                    onSelected: (place) => _place = place,
                   ),
                   const SizedBox(height: 14),
                   Row(

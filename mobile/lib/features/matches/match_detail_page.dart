@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app.dart';
 import '../../core/theme/app_theme.dart';
@@ -142,6 +144,18 @@ class _MatchContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (match.coverImageUrl?.isNotEmpty == true) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: CachedNetworkImage(
+                            imageUrl: match.coverImageUrl!,
+                            height: 170,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       Wrap(
                         spacing: 8,
                         children: [
@@ -151,6 +165,21 @@ class _MatchContent extends StatelessWidget {
                             ),
                           ),
                           Chip(label: Text(_statusLabel(summary.status))),
+                          if (match.fieldBookedAt != null)
+                            const Chip(
+                              backgroundColor: AppTheme.primary,
+                              side: BorderSide.none,
+                              avatar: Icon(
+                                Icons.verified,
+                                size: 16,
+                                color: AppTheme.background,
+                              ),
+                              labelStyle: TextStyle(
+                                color: AppTheme.background,
+                                fontWeight: FontWeight.w900,
+                              ),
+                              label: Text('Campo prenotato'),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -274,9 +303,9 @@ class _DetailsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = match.summary;
-    final perPlayer = match.costTotal == null || summary.goingCount == 0
+    final perPlayer = match.costTotal == null || summary.maxPlayers == 0
         ? null
-        : match.costTotal! / summary.goingCount;
+        : match.costTotal! / summary.maxPlayers;
     final isOpen = summary.status == 'open' || summary.status == 'full';
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -503,6 +532,26 @@ class _DetailsTab extends StatelessWidget {
             ),
           const SizedBox(height: 24),
         ],
+        if (match.venuePhone?.isNotEmpty == true) ...[
+          _FieldBookingCard(
+            match: match,
+            canBook: match.canManage || summary.currentResponse == 'going',
+            onBooked: onReload,
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (match.venueImageUrl?.isNotEmpty == true) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: CachedNetworkImage(
+              imageUrl: match.venueImageUrl!,
+              width: double.infinity,
+              height: 210,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         Card(
           child: Padding(
             padding: const EdgeInsets.all(19),
@@ -532,9 +581,9 @@ class _DetailsTab extends StatelessWidget {
                   const Divider(height: 30),
                   _Info(
                     icon: Icons.payments_outlined,
-                    label: 'Costo campo',
+                    label: 'Quota per giocatore',
                     value:
-                        '€ ${match.costTotal!.toStringAsFixed(2)}${perPlayer == null ? '' : ' · circa € ${perPlayer.toStringAsFixed(2)} a testa'}',
+                        '${perPlayer == null ? '' : '€ ${perPlayer.toStringAsFixed(2)} a persona · '}totale € ${match.costTotal!.toStringAsFixed(2)}',
                   ),
                 ],
               ],
@@ -750,6 +799,166 @@ class _ResponseButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _FieldBookingCard extends StatefulWidget {
+  const _FieldBookingCard({
+    required this.match,
+    required this.canBook,
+    required this.onBooked,
+  });
+
+  final MatchDetail match;
+  final bool canBook;
+  final Future<void> Function() onBooked;
+
+  @override
+  State<_FieldBookingCard> createState() => _FieldBookingCardState();
+}
+
+class _FieldBookingCardState extends State<_FieldBookingCard> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final booked = widget.match.fieldBookedAt != null;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: booked
+            ? AppTheme.primary.withValues(alpha: .12)
+            : AppTheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: booked
+              ? AppTheme.primary.withValues(alpha: .55)
+              : AppTheme.outline,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: AppTheme.background,
+                child: Icon(booked ? Icons.verified : Icons.stadium_outlined),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      booked ? 'Campo prenotato' : 'Prenota il campo',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      booked
+                          ? 'Prenotazione confermata a tutti i partecipanti.'
+                          : widget.canBook
+                          ? 'Chiama la struttura e poi conferma la prenotazione.'
+                          : 'Disponibile dopo aver confermato la presenza.',
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (widget.canBook) ...[
+            const SizedBox(height: 15),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _call,
+                    icon: const Icon(Icons.call_outlined),
+                    label: const Text('Chiama campo'),
+                  ),
+                ),
+                if (!booked) ...[
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _loading ? null : _confirm,
+                      icon: _loading
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.done_all),
+                      label: const Text('Conferma'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _call() async {
+    final phone = widget.match.venuePhone!;
+    final launched = await launchUrl(Uri(scheme: 'tel', path: phone));
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossibile aprire il telefono.')),
+      );
+    }
+  }
+
+  Future<void> _confirm() async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Campo prenotato?'),
+        content: const Text(
+          'Conferma solo dopo aver parlato con la struttura. Tutti i partecipanti riceveranno una notifica.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sì, conferma'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    setState(() => _loading = true);
+    try {
+      await AppScope.of(context).repository
+          .confirmFieldBooking(widget.match.summary.id);
+      await widget.onBooked();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Campo prenotato: partecipanti avvisati.'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 }
 
 class _Info extends StatelessWidget {

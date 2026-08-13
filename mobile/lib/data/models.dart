@@ -42,6 +42,9 @@ class UserProfile {
     required this.skillLevel,
     this.birthDate,
     this.city,
+    this.province,
+    this.latitude,
+    this.longitude,
     this.secondaryPosition,
     this.preferredFoot,
     this.profilePublic = true,
@@ -60,6 +63,9 @@ class UserProfile {
     skillLevel: map['skill_level']?.toString(),
     birthDate: map['birth_date']?.toString(),
     city: map['city']?.toString(),
+    province: map['province']?.toString(),
+    latitude: map['latitude'] == null ? null : asDouble(map['latitude']),
+    longitude: map['longitude'] == null ? null : asDouble(map['longitude']),
     secondaryPosition: map['secondary_position']?.toString(),
     preferredFoot: map['preferred_foot']?.toString(),
     profilePublic: map['profile_public'] != false,
@@ -77,6 +83,9 @@ class UserProfile {
   final String? skillLevel;
   final String? birthDate;
   final String? city;
+  final String? province;
+  final double? latitude;
+  final double? longitude;
   final String? secondaryPosition;
   final String? preferredFoot;
   final bool profilePublic;
@@ -288,6 +297,11 @@ class MatchSummary {
     required this.registrationClosedAt,
     required this.currentResponse,
     required this.isLeagueMember,
+    this.province,
+    this.latitude,
+    this.longitude,
+    this.distanceKm,
+    this.coverImageUrl,
   });
 
   factory MatchSummary.fromRpc(JsonMap map, {required LeagueSummary league}) =>
@@ -311,6 +325,10 @@ class MatchSummary {
             : asDate(map['registration_closed_at']),
         currentResponse: map['current_response']?.toString(),
         isLeagueMember: true,
+        province: map['province']?.toString(),
+        latitude: map['latitude'] == null ? null : asDouble(map['latitude']),
+        longitude: map['longitude'] == null ? null : asDouble(map['longitude']),
+        coverImageUrl: map['cover_image_url']?.toString(),
       );
 
   final String id;
@@ -329,6 +347,11 @@ class MatchSummary {
   final DateTime? registrationClosedAt;
   final String? currentResponse;
   final bool isLeagueMember;
+  final String? province;
+  final double? latitude;
+  final double? longitude;
+  final double? distanceKm;
+  final String? coverImageUrl;
 
   bool get isPast => startsAt.isBefore(DateTime.now()) || status == 'completed';
 }
@@ -379,6 +402,11 @@ class MatchDetail {
     this.latitude,
     this.longitude,
     this.postGame,
+    this.coverImageUrl,
+    this.venueImageUrl,
+    this.venuePhone,
+    this.fieldBookedAt,
+    this.fieldBookedBy,
   });
 
   final MatchSummary summary;
@@ -394,6 +422,11 @@ class MatchDetail {
   final double? latitude;
   final double? longitude;
   final MatchPostGame? postGame;
+  final String? coverImageUrl;
+  final String? venueImageUrl;
+  final String? venuePhone;
+  final DateTime? fieldBookedAt;
+  final String? fieldBookedBy;
 
   bool get canManage =>
       currentUserRole == 'owner' || currentUserRole == 'admin';

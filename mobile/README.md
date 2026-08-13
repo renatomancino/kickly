@@ -2,7 +2,7 @@
 
 App Flutter nativa per Android e iOS collegata allo stesso progetto Supabase della web app.
 
-La versione mobile mantiene la parità funzionale con la PWA: dashboard, profili e player card pubbliche, leghe e inviti/deep link, comunicazioni, classifiche, gestione membri e impostazioni, partite pubbliche, RSVP, formazioni, strumenti admin, promemoria, risultati, statistiche e votazione MVP.
+La versione mobile mantiene la parità funzionale con la PWA: dashboard, profili e player card pubbliche, leghe e inviti/deep link, comunicazioni, classifiche, gestione membri e impostazioni, partite pubbliche e vicine, RSVP, formazioni, strumenti admin, promemoria, risultati, statistiche e votazione MVP.
 
 ## Stack
 
@@ -42,6 +42,16 @@ Senza configurazione Supabase l'app offre una modalità demo locale dal login.
 ## Backend
 
 Il client mobile riusa tabelle, Storage, trigger, RLS e RPC già presenti in `../supabase` senza duplicare la logica di business nel telefono.
+
+La migrazione `20260813211721_nearby_matches_field_booking.sql` aggiunge:
+
+- località italiane verificate con comune, provincia e coordinate private del profilo;
+- distanza delle partite pubbliche dalla località dell'utente;
+- copertina della partita, foto del campo e bucket Storage protetto;
+- telefono e conferma della prenotazione del campo con notifica ai partecipanti;
+- quota individuale calcolata dal costo totale e dal numero di giocatori.
+
+Prima di usare queste funzioni su un progetto remoto, applica le migrazioni Supabase con la normale procedura di link e `supabase db push`. Le coordinate personali sono conservate in `profile_locations`, protetta da RLS e leggibile soltanto dal proprietario.
 
 ## Notifiche
 

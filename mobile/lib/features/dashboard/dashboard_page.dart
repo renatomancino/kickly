@@ -346,6 +346,12 @@ class _HeroMatch extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Chip(
+                          backgroundColor: AppTheme.primary,
+                          side: BorderSide.none,
+                          labelStyle: const TextStyle(
+                            color: AppTheme.background,
+                            fontWeight: FontWeight.w900,
+                          ),
                           label: Text(
                             match.footballFormat.replaceAll('v', ' vs '),
                           ),
@@ -366,7 +372,20 @@ class _HeroMatch extends StatelessWidget {
                     ),
                   ),
                   if (match.currentResponse == 'going')
-                    const Chip(label: Text('• Confermato')),
+                    const Chip(
+                      backgroundColor: AppTheme.primary,
+                      side: BorderSide.none,
+                      avatar: Icon(
+                        Icons.check_circle,
+                        size: 16,
+                        color: AppTheme.background,
+                      ),
+                      labelStyle: TextStyle(
+                        color: AppTheme.background,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      label: Text('Confermato'),
+                    ),
                 ],
               ),
               const SizedBox(height: 18),

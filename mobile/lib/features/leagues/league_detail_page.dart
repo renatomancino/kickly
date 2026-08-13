@@ -285,7 +285,11 @@ class _LeagueContent extends StatelessWidget {
         ],
         body: TabBarView(
           children: [
-            _LeagueHome(detail: detail, matches: matches),
+            _LeagueHome(
+              detail: detail,
+              matches: matches,
+              communications: communications,
+            ),
             _Communications(
               detail: detail,
               items: communications,
@@ -322,16 +326,83 @@ class _TabHeaderDelegate extends SliverPersistentHeaderDelegate {
 }
 
 class _LeagueHome extends StatelessWidget {
-  const _LeagueHome({required this.detail, required this.matches});
+  const _LeagueHome({
+    required this.detail,
+    required this.matches,
+    required this.communications,
+  });
   final LeagueDetail detail;
   final List<MatchSummary> matches;
+  final List<LeagueCommunication> communications;
 
   @override
   Widget build(BuildContext context) {
     final upcoming = matches.where((match) => !match.isPast).toList();
+    final pinned = communications.where((item) => item.pinned).firstOrNull;
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        if (pinned != null) ...[
+          InkWell(
+            onTap: () => DefaultTabController.of(context).animateTo(1),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppTheme.primary.withValues(alpha: .45),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: AppTheme.background,
+                    child: Icon(Icons.push_pin, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'MESSAGGIO FISSATO',
+                          style: TextStyle(
+                            color: AppTheme.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          pinned.title,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          pinned.body,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: AppTheme.primary),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         Card(
           child: Padding(
             padding: const EdgeInsets.all(19),
@@ -756,24 +827,51 @@ class _LeaderboardState extends State<_Leaderboard> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Wrap(
-          spacing: 7,
-          children:
-              {
-                    'overall': 'Overall',
-                    'goals': 'Gol',
-                    'assists': 'Assist',
-                    'mvp': 'MVP',
-                    'matches': 'Presenze',
-                  }.entries
-                  .map(
-                    (e) => ChoiceChip(
-                      selected: metric == e.key,
-                      label: Text(e.value),
-                      onSelected: (_) => setState(() => metric = e.key),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const metrics = {
+              'overall': ('Overall', Icons.bolt),
+              'goals': ('Gol', Icons.sports_soccer),
+              'assists': ('Assist', Icons.assistant_direction),
+              'mvp': ('MVP', Icons.emoji_events_outlined),
+              'matches': ('Presenze', Icons.calendar_month_outlined),
+            };
+            final columns = constraints.maxWidth >= 650 ? 5 : 2;
+            final width =
+                (constraints.maxWidth - ((columns - 1) * 8)) / columns;
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: metrics.entries.map((entry) {
+                final selected = metric == entry.key;
+                return SizedBox(
+                  width: width,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: selected
+                          ? AppTheme.primary
+                          : AppTheme.primary.withValues(alpha: .09),
+                      foregroundColor: selected
+                          ? AppTheme.background
+                          : AppTheme.primary,
+                      side: BorderSide(
+                        color: AppTheme.primary.withValues(
+                          alpha: selected ? 1 : .35,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 13,
+                      ),
                     ),
-                  )
-                  .toList(),
+                    onPressed: () => setState(() => metric = entry.key),
+                    icon: Icon(entry.value.$2, size: 17),
+                    label: FittedBox(child: Text(entry.value.$1)),
+                  ),
+                );
+              }).toList(),
+            );
+          },
         ),
         const SizedBox(height: 16),
         ...players.indexed.map(

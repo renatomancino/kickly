@@ -188,7 +188,7 @@ class MatchCard extends StatelessWidget {
     final response = switch (match.currentResponse) {
       'going' => 'Ci sei',
       'waitlist' => 'Lista attesa',
-      'declined' => 'Non ci sei',
+      'not_going' || 'declined' => 'Non ci sei',
       _ => null,
     };
     return Card(
@@ -200,6 +200,18 @@ class MatchCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (match.coverImageUrl?.isNotEmpty == true) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CachedNetworkImage(
+                    imageUrl: match.coverImageUrl!,
+                    width: double.infinity,
+                    height: 132,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 13),
+              ],
               Row(
                 children: [
                   Chip(
@@ -213,6 +225,15 @@ class MatchCard extends StatelessWidget {
                         color: AppTheme.primary,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  if (response == null && match.distanceKm != null)
+                    Text(
+                      '${match.distanceKm!.toStringAsFixed(match.distanceKm! < 10 ? 1 : 0)} km',
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                 ],

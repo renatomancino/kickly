@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -55,17 +56,29 @@ class KicklyRepository {
     if (isDemo) return demoProfile;
     final userId = currentUserId;
     if (userId == null) return null;
-    final row = await client!
-        .from('profiles')
-        .select(
-          'id, username, first_name, last_name, avatar_path, primary_position, '
-          'secondary_position, preferred_foot, skill_level, birth_date, city, '
-          'profile_public, overall, timezone, onboarding_completed',
-        )
-        .eq('id', userId)
-        .maybeSingle();
+    final values = await Future.wait<dynamic>([
+      client!
+          .from('profiles')
+          .select(
+            'id, username, first_name, last_name, avatar_path, primary_position, '
+            'secondary_position, preferred_foot, skill_level, birth_date, city, '
+            'province, profile_public, overall, timezone, onboarding_completed',
+          )
+          .eq('id', userId)
+          .maybeSingle(),
+      client!
+          .from('profile_locations')
+          .select('city, province, latitude, longitude')
+          .eq('user_id', userId)
+          .maybeSingle(),
+    ]);
+    final row = values[0];
     if (row == null) return null;
-    return _mapProfile(Map<String, dynamic>.from(row));
+    final merged = Map<String, dynamic>.from(row as Map);
+    if (values[1] is Map) {
+      merged.addAll(Map<String, dynamic>.from(values[1] as Map));
+    }
+    return _mapProfile(merged);
   }
 
   Future<void> saveProfile({
@@ -76,6 +89,9 @@ class KicklyRepository {
     required String skillLevel,
     String? birthDate,
     String? city,
+    String? province,
+    double? latitude,
+    double? longitude,
     String? secondaryPosition,
     String? preferredFoot,
     bool profilePublic = true,
@@ -120,11 +136,25 @@ class KicklyRepository {
       'skill_level': skillLevel,
       'birth_date': birthDate?.trim().isEmpty == true ? null : birthDate,
       'city': city?.trim() ?? '',
+      'province': province?.trim(),
       'profile_public': profilePublic,
       'onboarding_completed': true,
     };
     if (avatarPath != null) payload['avatar_path'] = avatarPath;
     await client!.from('profiles').upsert(payload, onConflict: 'id');
+    if (city?.trim().isNotEmpty == true &&
+        province?.trim().isNotEmpty == true &&
+        latitude != null &&
+        longitude != null) {
+      await client!.from('profile_locations').upsert({
+        'user_id': userId,
+        'city': city!.trim(),
+        'province': province!.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+    }
   }
 
   Future<List<LeagueSummary>> getLeagues() async {
@@ -542,11 +572,18 @@ class KicklyRepository {
 
   Future<List<MatchSummary>> getMatches() async {
     if (isDemo) return demoMatches;
-    final leagues = await getLeagues();
+    final initial = await Future.wait<dynamic>([
+      getLeagues(),
+      getCurrentProfile(),
+    ]);
+    final leagues = initial[0] as List<LeagueSummary>;
+    final profile = initial[1] as UserProfile?;
     final rows = await client!
         .from('matches')
         .select(
-          'id, league_id, title, starts_at, location_name, city, football_format, max_players, visibility, status, registration_closed_at',
+          'id, league_id, title, starts_at, location_name, city, province, '
+          'latitude, longitude, cover_image_url, football_format, max_players, '
+          'visibility, status, registration_closed_at',
         )
         .order('starts_at');
     final list = (rows as List<dynamic>)
@@ -593,6 +630,12 @@ class KicklyRepository {
           )
           .map((p) => p['response']?.toString())
           .firstOrNull;
+      final latitude = row['latitude'] == null
+          ? null
+          : asDouble(row['latitude']);
+      final longitude = row['longitude'] == null
+          ? null
+          : asDouble(row['longitude']);
       return MatchSummary(
         id: row['id'].toString(),
         leagueId: row['league_id'].toString(),
@@ -612,6 +655,22 @@ class KicklyRepository {
             : asDate(row['registration_closed_at']),
         currentResponse: response,
         isLeagueMember: ownLeagueIds.contains(row['league_id'].toString()),
+        province: row['province']?.toString(),
+        latitude: latitude,
+        longitude: longitude,
+        distanceKm:
+            profile?.latitude == null ||
+                profile?.longitude == null ||
+                latitude == null ||
+                longitude == null
+            ? null
+            : _distanceKm(
+                profile!.latitude!,
+                profile.longitude!,
+                latitude,
+                longitude,
+              ),
+        coverImageUrl: row['cover_image_url']?.toString(),
       );
     }).toList();
     matches.sort((a, b) => a.startsAt.compareTo(b.startsAt));
@@ -647,6 +706,7 @@ class KicklyRepository {
         description: 'Una partita Kickly aperta a tutti i membri della lega.',
         address: '${summary.locationName}, ${summary.city}',
         costTotal: 90,
+        venuePhone: '+39 02 1234567',
         currentUserRole: 'admin',
         participants: List.generate(
           summary.goingCount,
@@ -688,7 +748,8 @@ class KicklyRepository {
           'location_name, address, city, football_format, max_players, '
           'cost_total, visibility, status, registration_closed_at, '
           'latitude, longitude, team_a_score, team_b_score, completed_at, '
-          'mvp_voting_ends_at, mvp_finalized_at',
+          'mvp_voting_ends_at, mvp_finalized_at, province, cover_image_url, '
+          'venue_image_url, venue_phone, field_booked_at, field_booked_by',
         )
         .eq('id', id)
         .maybeSingle();
@@ -787,6 +848,12 @@ class KicklyRepository {
           : asDate(match['registration_closed_at']),
       currentResponse: currentResponse,
       isLeagueMember: membership != null,
+      province: match['province']?.toString(),
+      latitude: match['latitude'] == null ? null : asDouble(match['latitude']),
+      longitude: match['longitude'] == null
+          ? null
+          : asDouble(match['longitude']),
+      coverImageUrl: match['cover_image_url']?.toString(),
     );
     final postGame =
         summary.status == 'completed' && match['completed_at'] != null
@@ -814,6 +881,13 @@ class KicklyRepository {
           ? null
           : asDouble(match['longitude']),
       postGame: postGame,
+      coverImageUrl: match['cover_image_url']?.toString(),
+      venueImageUrl: match['venue_image_url']?.toString(),
+      venuePhone: match['venue_phone']?.toString(),
+      fieldBookedAt: match['field_booked_at'] == null
+          ? null
+          : asDate(match['field_booked_at']),
+      fieldBookedBy: match['field_booked_by']?.toString(),
     );
   }
 
@@ -833,6 +907,10 @@ class KicklyRepository {
     required String locationName,
     required String address,
     required String city,
+    required String province,
+    required double latitude,
+    required double longitude,
+    required String venuePhone,
     required String footballFormat,
     required int maxPlayers,
     required double? costTotal,
@@ -849,6 +927,10 @@ class KicklyRepository {
         'match_location_name': locationName.trim(),
         'match_address': address.trim(),
         'match_city': city.trim(),
+        'match_province': province.trim(),
+        'match_latitude': latitude,
+        'match_longitude': longitude,
+        'match_venue_phone': venuePhone.trim(),
         'match_football_format': footballFormat,
         'match_max_players': maxPlayers,
         'match_cost_total': costTotal,
@@ -862,6 +944,62 @@ class KicklyRepository {
       await client!.rpc(
         'set_match_admin_state',
         params: {'target_match': matchId, 'target_action': action},
+      );
+    }
+  }
+
+  Future<void> confirmFieldBooking(String matchId) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'confirm_field_booking',
+        params: {'target_match': matchId},
+      );
+    }
+  }
+
+  Future<String> uploadMatchImage({
+    required String matchId,
+    required Uint8List bytes,
+    required String extension,
+    required String kind,
+  }) async {
+    if (isDemo) return '';
+    final requested = extension.toLowerCase();
+    final safeExtension = ['png', 'webp'].contains(requested)
+        ? requested
+        : 'jpg';
+    final path = '$matchId/$kind.$safeExtension';
+    await client!.storage
+        .from('match-media')
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: safeExtension == 'png'
+                ? 'image/png'
+                : safeExtension == 'webp'
+                ? 'image/webp'
+                : 'image/jpeg',
+          ),
+        );
+    final publicUrl = client!.storage.from('match-media').getPublicUrl(path);
+    return '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  Future<void> setMatchMedia(
+    String matchId, {
+    String? coverImageUrl,
+    String? venueImageUrl,
+  }) async {
+    if (!isDemo) {
+      await client!.rpc(
+        'set_match_media',
+        params: {
+          'target_match': matchId,
+          'match_cover_image_url': coverImageUrl ?? '',
+          'match_venue_image_url': venueImageUrl ?? '',
+        },
       );
     }
   }
@@ -969,6 +1107,10 @@ class KicklyRepository {
     required String locationName,
     required String address,
     required String city,
+    required String province,
+    required double latitude,
+    required double longitude,
+    required String venuePhone,
     required String footballFormat,
     required int maxPlayers,
     required double? costTotal,
@@ -985,6 +1127,10 @@ class KicklyRepository {
         'match_location_name': locationName.trim(),
         'match_address': address.trim(),
         'match_city': city.trim(),
+        'match_province': province.trim(),
+        'match_latitude': latitude,
+        'match_longitude': longitude,
+        'match_venue_phone': venuePhone.trim(),
         'match_football_format': footballFormat,
         'match_max_players': maxPlayers,
         'match_cost_total': costTotal,
@@ -1354,6 +1500,21 @@ class KicklyRepository {
     return client!.storage.from(bucket).getPublicUrl(path);
   }
 }
+
+double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
+  const earthRadiusKm = 6371.0;
+  final deltaLatitude = _radians(lat2 - lat1);
+  final deltaLongitude = _radians(lon2 - lon1);
+  final a =
+      math.sin(deltaLatitude / 2) * math.sin(deltaLatitude / 2) +
+      math.cos(_radians(lat1)) *
+          math.cos(_radians(lat2)) *
+          math.sin(deltaLongitude / 2) *
+          math.sin(deltaLongitude / 2);
+  return earthRadiusKm * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+}
+
+double _radians(double degrees) => degrees * math.pi / 180;
 
 class AppState extends ChangeNotifier {
   AppState({required this.repository});
