@@ -149,5 +149,9 @@ function initials(author: LeagueCommunication["author"]) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("it-IT", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Rome",
+  }).format(new Date(value));
 }

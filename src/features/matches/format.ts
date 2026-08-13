@@ -1,10 +1,13 @@
 import type { MatchStatus } from "@/types/database";
 
+const kicklyTimeZone = "Europe/Rome";
+
 export function matchDateLabel(value: string) {
   return new Intl.DateTimeFormat("it-IT", {
     weekday: "long",
     day: "numeric",
     month: "long",
+    timeZone: kicklyTimeZone,
   }).format(new Date(value));
 }
 
@@ -12,6 +15,7 @@ export function matchTimeLabel(value: string) {
   return new Intl.DateTimeFormat("it-IT", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: kicklyTimeZone,
   }).format(new Date(value));
 }
 
@@ -19,6 +23,7 @@ export function matchShortDate(value: string) {
   return new Intl.DateTimeFormat("it-IT", {
     day: "2-digit",
     month: "short",
+    timeZone: kicklyTimeZone,
   }).format(new Date(value));
 }
 
