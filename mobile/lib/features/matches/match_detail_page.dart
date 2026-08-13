@@ -1243,90 +1243,216 @@ class _InteractiveLineupTabState extends State<_InteractiveLineupTab> {
                 ],
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF173D23),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: side,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 9,
-                    crossAxisSpacing: 9,
-                    childAspectRatio: 1.35,
-                  ),
-                  itemBuilder: (context, index) {
-                    final slot = index == 0 ? 'gk' : 'p$index';
-                    final row = rows
-                        .where((r) => r['slot_key']?.toString() == slot)
-                        .firstOrNull;
-                    final player = row == null
-                        ? null
-                        : match.participants
-                              .where(
-                                (p) => p.userId == row['user_id']?.toString(),
-                              )
-                              .firstOrNull;
-                    final mine = player?.userId == match.currentUserId;
-                    return InkWell(
-                      onTap: busy || player != null
-                          ? null
-                          : () => _slot(teamNumber, slot),
-                      borderRadius: BorderRadius.circular(13),
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: mine
-                              ? AppTheme.primary
-                              : Colors.black.withValues(
-                                  alpha: player == null ? .18 : .38,
-                                ),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(
-                            color: player == null
-                                ? Colors.white24
-                                : (mine ? AppTheme.primary : Colors.white38),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              player == null ? Icons.add : Icons.sports_soccer,
-                              size: 18,
-                              color: mine ? AppTheme.background : Colors.white,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              player?.displayName ??
-                                  (index == 0 ? 'Portiere' : 'Libero'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                color: mine
-                                    ? AppTheme.background
-                                    : Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              _buildPitch(
+                teamNumber: teamNumber,
+                formation:
+                    team?['formation']?.toString() ??
+                    _formations(match.summary.footballFormat).first,
+                side: side,
+                rows: rows,
+                captainId: team?['captain_user_id']?.toString(),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildPitch({
+    required int teamNumber,
+    required String formation,
+    required int side,
+    required List<JsonMap> rows,
+    required String? captainId,
+  }) {
+    final positions = _pitchPositions(formation, side);
+    final widestLine = formation
+        .split('-')
+        .map((value) => int.tryParse(value) ?? 1)
+        .fold<int>(1, (largest, value) => value > largest ? value : largest);
+
+    return AspectRatio(
+      aspectRatio: .68,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tokenWidth = switch (widestLine) {
+            >= 5 => 58.0,
+            4 => 66.0,
+            3 => 78.0,
+            _ => 88.0,
+          };
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF216536), Color(0xFF174A2A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: CustomPaint(painter: const _FootballPitchPainter()),
+                  ),
+                ),
+                Positioned(
+                  left: 13,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .34),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      'TEAM $teamNumber · $formation',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ),
+                ...positions.map((position) {
+                  final row = rows
+                      .where(
+                        (item) => item['slot_key']?.toString() == position.slot,
+                      )
+                      .firstOrNull;
+                  final player = row == null
+                      ? null
+                      : match.participants
+                            .where(
+                              (item) =>
+                                  item.userId == row['user_id']?.toString(),
+                            )
+                            .firstOrNull;
+                  final mine = player?.userId == match.currentUserId;
+                  return Positioned(
+                    left: constraints.maxWidth * position.x - tokenWidth / 2,
+                    top: constraints.maxHeight * position.y - 35,
+                    width: tokenWidth,
+                    height: 76,
+                    child: _PitchPlayer(
+                      role: position.role,
+                      player: player,
+                      mine: mine,
+                      captain: player != null && player.userId == captainId,
+                      enabled: !busy && player == null,
+                      onTap: () => _slot(teamNumber, position.slot),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<_PitchPosition> _pitchPositions(String formation, int side) {
+    final lines = formation
+        .split('-')
+        .map((value) => int.tryParse(value) ?? 0)
+        .where((value) => value > 0)
+        .toList();
+    if (lines.fold<int>(0, (sum, value) => sum + value) != side - 1) {
+      return [
+        const _PitchPosition(slot: 'gk', role: 'Portiere', x: .5, y: .88),
+        ...List.generate(
+          side - 1,
+          (index) => _PitchPosition(
+            slot: 'p${index + 1}',
+            role: 'Giocatore',
+            x: (index % 3 + 1) / 4,
+            y: .68 - (index ~/ 3) * .22,
+          ),
+        ),
+      ];
+    }
+
+    final positions = <_PitchPosition>[
+      const _PitchPosition(slot: 'gk', role: 'Portiere', x: .5, y: .89),
+    ];
+    var slotNumber = 1;
+    final lineY = lines.length == 3
+        ? const [.70, .48, .25]
+        : lines.length == 1
+        ? const [.48]
+        : List.generate(
+            lines.length,
+            (index) => .72 - index * (.48 / (lines.length - 1)),
+          );
+    for (var lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      final count = lines[lineIndex];
+      final roles = _rolesForLine(lineIndex, lines.length, count);
+      for (var index = 0; index < count; index++) {
+        positions.add(
+          _PitchPosition(
+            slot: 'p$slotNumber',
+            role: roles[index],
+            x: (index + 1) / (count + 1),
+            y: lineY[lineIndex],
+          ),
+        );
+        slotNumber += 1;
+      }
+    }
+    return positions;
+  }
+
+  List<String> _rolesForLine(int line, int totalLines, int count) {
+    if (line == 0) {
+      return switch (count) {
+        1 => const ['Difensore'],
+        2 => const ['Terzino SX', 'Terzino DX'],
+        3 => const ['Terzino SX', 'Difensore', 'Terzino DX'],
+        4 => const [
+          'Terzino SX',
+          'Dif. centrale',
+          'Dif. centrale',
+          'Terzino DX',
+        ],
+        _ => List.generate(count, (index) => 'Difensore ${index + 1}'),
+      };
+    }
+    if (line == totalLines - 1) {
+      return switch (count) {
+        1 => const ['Punta'],
+        2 => const ['Attaccante SX', 'Attaccante DX'],
+        3 => const ['Ala SX', 'Punta', 'Ala DX'],
+        _ => List.generate(count, (index) => 'Attaccante ${index + 1}'),
+      };
+    }
+    return switch (count) {
+      1 => const ['Mediano'],
+      2 => const ['Centrocampista SX', 'Centrocampista DX'],
+      3 => const ['Esterno SX', 'Mediano', 'Esterno DX'],
+      4 => const [
+        'Esterno SX',
+        'Centrocampista',
+        'Centrocampista',
+        'Esterno DX',
+      ],
+      5 => const [
+        'Esterno SX',
+        'Mezzala SX',
+        'Mediano',
+        'Mezzala DX',
+        'Esterno DX',
+      ],
+      _ => List.generate(count, (index) => 'Centrocampista ${index + 1}'),
+    };
   }
 
   List<String> _formations(String format) => switch (format) {
@@ -1336,6 +1462,264 @@ class _InteractiveLineupTabState extends State<_InteractiveLineupTab> {
     '10v10' => const ['3-4-2', '4-3-2', '4-4-1'],
     _ => const ['4-3-3', '4-4-2', '3-5-2'],
   };
+}
+
+class _PitchPosition {
+  const _PitchPosition({
+    required this.slot,
+    required this.role,
+    required this.x,
+    required this.y,
+  });
+
+  final String slot;
+  final String role;
+  final double x;
+  final double y;
+}
+
+class _PitchPlayer extends StatelessWidget {
+  const _PitchPlayer({
+    required this.role,
+    required this.player,
+    required this.mine,
+    required this.captain,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String role;
+  final MatchParticipant? player;
+  final bool mine;
+  final bool captain;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = mine ? AppTheme.background : Colors.white;
+    return Semantics(
+      button: player == null,
+      label: player == null
+          ? 'Scegli posizione $role'
+          : '${player!.displayName}, $role',
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(14),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 43,
+                  height: 43,
+                  decoration: BoxDecoration(
+                    color: mine
+                        ? AppTheme.primary
+                        : player == null
+                        ? const Color(0xFF173D23).withValues(alpha: .88)
+                        : const Color(0xFF101411),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: mine
+                          ? AppTheme.primary
+                          : player == null
+                          ? Colors.white70
+                          : Colors.white,
+                      width: mine ? 3 : 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: .35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: player == null
+                      ? const Icon(Icons.add, color: Colors.white, size: 22)
+                      : player!.avatarUrl?.isNotEmpty == true
+                      ? ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: player!.avatarUrl!,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, _, _) => Icon(
+                              Icons.sports_soccer,
+                              color: foreground,
+                              size: 20,
+                            ),
+                          ),
+                        )
+                      : Icon(Icons.sports_soccer, color: foreground, size: 20),
+                ),
+                if (captain)
+                  const Positioned(
+                    right: -5,
+                    top: -5,
+                    child: CircleAvatar(
+                      radius: 9,
+                      backgroundColor: Color(0xFFFFD84D),
+                      foregroundColor: Colors.black,
+                      child: Text(
+                        'C',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Container(
+              constraints: const BoxConstraints(minWidth: 48),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: mine
+                    ? AppTheme.primary
+                    : Colors.black.withValues(alpha: .72),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                player?.displayName ?? 'Scegli',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              role.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppTheme.primary,
+                fontSize: 7,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FootballPitchPainter extends CustomPainter {
+  const _FootballPitchPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stripe = Paint()..color = Colors.white.withValues(alpha: .035);
+    for (var index = 0; index < 8; index += 2) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, size.height * index / 8, size.width, size.height / 8),
+        stripe,
+      );
+    }
+
+    final line = Paint()
+      ..color = Colors.white.withValues(alpha: .52)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final inset = size.width * .045;
+    final field = Rect.fromLTWH(
+      inset,
+      inset,
+      size.width - inset * 2,
+      size.height - inset * 2,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(field, const Radius.circular(4)),
+      line,
+    );
+    canvas.drawLine(
+      Offset(inset, size.height / 2),
+      Offset(size.width - inset, size.height / 2),
+      line,
+    );
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      size.width * .13,
+      line,
+    );
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      2,
+      Paint()..color = Colors.white.withValues(alpha: .65),
+    );
+
+    final penaltyWidth = size.width * .55;
+    final penaltyHeight = size.height * .13;
+    final smallWidth = size.width * .28;
+    final smallHeight = size.height * .055;
+    canvas.drawRect(
+      Rect.fromLTWH(
+        (size.width - penaltyWidth) / 2,
+        inset,
+        penaltyWidth,
+        penaltyHeight,
+      ),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        (size.width - penaltyWidth) / 2,
+        size.height - inset - penaltyHeight,
+        penaltyWidth,
+        penaltyHeight,
+      ),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        (size.width - smallWidth) / 2,
+        inset,
+        smallWidth,
+        smallHeight,
+      ),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        (size.width - smallWidth) / 2,
+        size.height - inset - smallHeight,
+        smallWidth,
+        smallHeight,
+      ),
+      line,
+    );
+
+    final goalWidth = size.width * .18;
+    canvas.drawRect(
+      Rect.fromLTWH((size.width - goalWidth) / 2, 1, goalWidth, inset - 1),
+      line,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        (size.width - goalWidth) / 2,
+        size.height - inset,
+        goalWidth,
+        inset - 1,
+      ),
+      line,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FootballPitchPainter oldDelegate) => false;
 }
 
 String _statusLabel(String status) => switch (status) {
