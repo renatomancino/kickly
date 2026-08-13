@@ -1,0 +1,38 @@
+{
+  "readiness": {
+    "edgeFunction": "present",
+    "cron_in_migrations": {
+      "push_worker_entry": "declared",
+      "reminders_entry": "declared"
+    },
+    "vapid_keys_declared": "declared_in_migrations",
+    "service_role_available": "available",
+    "kickly_project_url": "provided",
+    "kickly_publishable_key": "provided",
+    "vault_secrets": {
+      "kickly_vapid_public_key": false,
+      "kickly_vapid_private_key": false,
+      "kickly_vapid_subject": false,
+      "kickly_project_url": false,
+      "kickly_publishable_key": false
+    }
+  },
+  "results": {
+    "match_created": "PENDING",
+    "match_updated": "PENDING",
+    "match_cancelled": "PENDING",
+    "match_reminder_24h": "FAIL",
+    "match_reminder_2h": "FAIL",
+    "waitlist_promoted": "PENDING",
+    "mvp_voting_open": "FAIL",
+    "mvp_reminder": "PENDING",
+    "mvp_winner": "FAIL",
+    "rating_changed": "BLOCKED",
+    "league_invite": "FAIL",
+    "league_role_promote": "FAIL",
+    "league_role_demote": "FAIL",
+    "preferences": "PENDING",
+    "deduplication": "PENDING",
+    "multi_device": "PENDING"
+  }
+}
