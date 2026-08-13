@@ -17,8 +17,11 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icons/kickly-icon-192.svg",
-    apple: "/icons/kickly-icon-192.svg",
+    icon: [
+      { url: "/icons/kickly-icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/kickly-icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
   },
   appleWebApp: { capable: true, statusBarStyle: "black", title: "Kickly" },
   openGraph: {

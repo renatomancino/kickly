@@ -1,5 +1,5 @@
 const CACHE = "kickly-shell-v1";
-const OFFLINE_ASSETS = ["/offline", "/manifest.webmanifest", "/icons/kickly-icon-192.svg", "/icons/kickly-icon-512.svg", "/icons/badge.svg"];
+const OFFLINE_ASSETS = ["/offline", "/manifest.webmanifest", "/icons/kickly-icon-192.png", "/icons/kickly-icon-512.png", "/icons/kickly-maskable-512.png", "/icons/apple-touch-icon.png", "/icons/badge.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(OFFLINE_ASSETS)).then(() => self.skipWaiting()));
@@ -19,7 +19,7 @@ self.addEventListener("push", (event) => {
   try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() }; }
   event.waitUntil(self.registration.showNotification(payload.title || "Kickly", {
     body: payload.body || "Hai una nuova notifica",
-    icon: "/icons/kickly-icon-192.svg",
+    icon: "/icons/kickly-icon-192.png",
     badge: "/icons/badge.svg",
     tag: payload.id || undefined,
     data: { link: payload.link || "/notifications" },

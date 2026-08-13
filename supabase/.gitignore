@@ -6,3 +6,8 @@
 .env.keys
 .env.local
 .env.*.local
+# E2E runtime artifacts
+scripts/e2e-created.json
+scripts/e2e-report.json
+scripts/e2e-final-report.txt
+scripts/FASE7_REPORT_FINALE.txt
