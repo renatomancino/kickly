@@ -98,82 +98,141 @@ class _KicklyBottomBar extends StatelessWidget {
       2 => 1,
       _ => selectedIndex,
     };
-    // Prima era un rettangolo nero piatto con angoli squadrati incollato al
-    // bordo schermo: stonava con il resto dell'app, tutta fatta di card
-    // arrotondate. Angoli alti tondi + un leggero gradiente verso la
-    // superficie delle card (invece del nero pieno) + un'ombra verso l'alto
-    // la fanno leggere come un pannello sospeso sopra il contenuto, non come
-    // un bordo tagliato di netto.
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusXl),
-        ),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppTheme.surface, Color(0xFA0B0D0C)],
-        ),
-        border: const Border(top: BorderSide(color: AppTheme.outline)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .38),
-            blurRadius: 28,
-            offset: const Offset(0, -8),
-          ),
-        ],
+    // Slot nella Row: 5 in tutto (4 item + il "+" al centro). L'item attivo
+    // dopo lo slot del "+" scala di uno per restare allineato alla Row.
+    const slots = 5;
+    final activeSlot = active < 2 ? active : active + 1;
+    // Centro dello slot attivo, in coordinate Alignment (-1..1). Alignment
+    // posiziona il figlio in base al proprio bordo (non al centro assoluto
+    // del parent) quando ha una larghezza propria: con un figlio largo
+    // 1/slots del parent, il centro dello slot k è a x = 2k/(slots-1) - 1,
+    // non -1 + 2(k+0.5)/slots (quella formula ignorerebbe la larghezza del
+    // figlio e sfaserebbe la lampada rispetto all'icona).
+    final lampAlignX = 2 * activeSlot / (slots - 1) - 1;
+    // Ispirata al pattern "tubelight navbar" (capsula fluttuante, sfondo
+    // vetro, indicatore luminoso che scivola da una tab all'altra) invece
+    // del rettangolo squadrato incollato al bordo di prima. Adattata da
+    // React/Tailwind/Framer Motion a Flutter: niente CSS `layoutId`, la
+    // lampada scivola con un AnimatedAlign dentro uno Stack sopra la Row.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        10 + MediaQuery.paddingOf(context).bottom,
       ),
-      padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
-      child: SizedBox(
-        height: 66,
-        child: Row(
-          children: [
-            for (var i = 0; i < 2; i++)
-              Expanded(child: _item(context, items[i], i == active)),
-            Expanded(
-              child: Transform.translate(
-                offset: const Offset(0, -13),
-                child: Center(
-                  child: DecoratedBox(
-                    // Alone verde sotto al pulsante, come lo
-                    // `shadow-[0_10px_28px_-8px_var(--primary)]` della PWA:
-                    // è quello che lo fa sembrare acceso invece di un
-                    // quadrato verde appiccicato sulla barra.
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primary.withValues(alpha: .45),
-                          blurRadius: 22,
-                          spreadRadius: -6,
-                          offset: const Offset(0, 9),
-                        ),
-                      ],
-                    ),
-                    child: Material(
-                      color: AppTheme.primary,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => _quickActions(context),
-                        child: const SizedBox(
-                          width: 50,
-                          height: 50,
-                          child: Icon(
-                            Icons.add,
-                            color: AppTheme.onPrimary,
-                            size: 27,
-                          ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          // Superficie semitrasparente: lascia intravedere l'alone verde
+          // di `KicklyBackdrop` dietro, per l'aria "di vetro" del
+          // `backdrop-blur-lg` originale (un vero blur richiederebbe che il
+          // contenuto scorra sotto la barra, che qui non fa).
+          color: AppTheme.surfaceHigh.withValues(alpha: .74),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppTheme.outline),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .35),
+              blurRadius: 26,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: SizedBox(
+          height: 64,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment(lampAlignX, -1),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / slots,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Container(
+                        width: 28,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          borderRadius: BorderRadius.circular(999),
+                          // Doppio alone sfumato sotto la barretta, come i
+                          // tre blob sovrapposti (`blur-md`/`blur-sm`) del
+                          // componente originale.
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primary.withValues(alpha: .55),
+                              blurRadius: 14,
+                              spreadRadius: 1,
+                              offset: const Offset(0, 6),
+                            ),
+                            BoxShadow(
+                              color: AppTheme.primary.withValues(alpha: .28),
+                              blurRadius: 26,
+                              spreadRadius: 3,
+                              offset: const Offset(0, 14),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            for (var i = 2; i < items.length; i++)
-              Expanded(child: _item(context, items[i], i == active)),
-          ],
+              Row(
+                children: [
+                  for (var i = 0; i < 2; i++)
+                    Expanded(child: _item(context, items[i], i == active)),
+                  Expanded(
+                    child: Transform.translate(
+                      offset: const Offset(0, -13),
+                      child: Center(
+                        child: DecoratedBox(
+                          // Alone verde sotto al pulsante, come lo
+                          // `shadow-[0_10px_28px_-8px_var(--primary)]` della
+                          // PWA: è quello che lo fa sembrare acceso invece di
+                          // un quadrato verde appiccicato sulla barra.
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primary.withValues(alpha: .45),
+                                blurRadius: 22,
+                                spreadRadius: -6,
+                                offset: const Offset(0, 9),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: AppTheme.primary,
+                            borderRadius: BorderRadius.circular(16),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () => _quickActions(context),
+                              child: const SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: Icon(
+                                  Icons.add,
+                                  color: AppTheme.onPrimary,
+                                  size: 27,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  for (var i = 2; i < items.length; i++)
+                    Expanded(child: _item(context, items[i], i == active)),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -185,28 +244,15 @@ class _KicklyBottomBar extends StatelessWidget {
     bool active,
   ) {
     return InkWell(
+      borderRadius: BorderRadius.circular(999),
       onTap: () => context.go(item.$4),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Pillola morbida dietro l'icona attiva: rinforza lo stato
-          // selezionato con lo stesso linguaggio "pill" arrotondato già usato
-          // per badge e filtri nel resto dell'app, invece del solo cambio
-          // colore che si perdeva nel nuovo sfondo sfumato.
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
-            decoration: BoxDecoration(
-              color: active
-                  ? AppTheme.primary.withValues(alpha: .14)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Icon(
-              active ? item.$2 : item.$1,
-              size: 21,
-              color: active ? AppTheme.primary : AppTheme.muted,
-            ),
+          Icon(
+            active ? item.$2 : item.$1,
+            size: 21,
+            color: active ? AppTheme.primary : AppTheme.muted,
           ),
           const SizedBox(height: 3),
           Text(
