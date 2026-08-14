@@ -125,10 +125,16 @@ class _ProfilePageState extends State<ProfilePage> {
                       icon: Icons.logout,
                       title: 'Esci',
                       danger: true,
-                      onTap: () async {
-                        await AppScope.of(context).appState.signOut();
-                        if (context.mounted) context.go('/login');
-                      },
+                      // Solo signOut(): AppState.signOut() già chiama
+                      // notifyListeners(), e il redirect del router (che
+                      // ascolta AppState tramite refreshListenable) manda
+                      // già da solo a /login quando isSignedIn diventa
+                      // false. Un context.go('/login') qui in più correva in
+                      // parallelo con quel redirect automatico ed era la
+                      // causa di un crash intermittente ("Duplicate
+                      // GlobalKey detected in widget tree", visto in log
+                      // reali) per doppia navigazione nello stesso frame.
+                      onTap: () => AppScope.of(context).appState.signOut(),
                     ),
                   ],
                 ),
