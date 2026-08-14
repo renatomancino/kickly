@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,8 +18,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<ProfileDetails>? _future;
 
   // 0 = Panoramica (statistiche del momento), 1 = Andamento (come sono
-  // arrivate quelle statistiche nel tempo). Un CupertinoSlidingSegmentedControl
-  // al posto di impilare tutto in un'unica scrollata lunghissima: separa lo
+  // arrivate quelle statistiche nel tempo). Un selettore a due segmenti al
+  // posto di impilare tutto in un'unica scrollata lunghissima: separa lo
   // "scatto" dal "percorso", come fanno le app Apple (Fitness, Salute) quando
   // un profilo ha sia un riepilogo sia uno storico.
   int _tab = 0;
@@ -152,37 +151,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    Center(
-                      child: CupertinoSlidingSegmentedControl<int>(
-                        groupValue: _tab,
-                        backgroundColor: AppTheme.surfaceHigh,
-                        thumbColor: AppTheme.surface,
-                        onValueChanged: (value) {
-                          if (value != null) setState(() => _tab = value);
-                        },
-                        children: const {
-                          0: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 7,
-                            ),
-                            child: Text(
-                              'Panoramica',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          1: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 7,
-                            ),
-                            child: Text(
-                              'Andamento',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        },
-                      ),
+                    _TabSwitch(
+                      value: _tab,
+                      onChanged: (value) => setState(() => _tab = value),
                     ),
                     const SizedBox(height: 20),
                     // AnimatedSwitcher invece di uno swap secco: il cambio tab
@@ -422,6 +393,87 @@ class _CollapsedTitle extends StatelessWidget {
             color: AppTheme.foreground,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Selettore Panoramica/Andamento, largo quanto il resto del contenuto
+/// (testata, card) invece del CupertinoSlidingSegmentedControl di default:
+/// quello restava piu stretto, centrato a se, e con un raggio d'angolo
+/// tutto suo diverso da ogni altra pillola dell'app — il dettaglio che
+/// faceva sembrare la barra "attaccata" senza combaciare con i bordi del
+/// resto della pagina. Qui e a piena larghezza, raggio 999 come le altre
+/// pillole (vedi ProfileInfoPill), e il cursore scorre con lo stesso
+/// AnimatedAlign gia usato per la lampada della bottom bar.
+class _TabSwitch extends StatelessWidget {
+  const _TabSwitch({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  static const _labels = ['Panoramica', 'Andamento'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.outline),
+      ),
+      child: Stack(
+        children: [
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: value == 0
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.5,
+              heightFactor: 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .28),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              for (var i = 0; i < _labels.length; i++)
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => onChanged(i),
+                    child: Center(
+                      child: Text(
+                        _labels[i],
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                          color: value == i
+                              ? AppTheme.foreground
+                              : AppTheme.muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
