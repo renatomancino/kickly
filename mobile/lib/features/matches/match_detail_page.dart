@@ -130,6 +130,11 @@ class _MatchContent extends StatelessWidget {
     final summary = match.summary;
     final date = DateFormat('EEEE d MMMM y', 'it_IT').format(summary.startsAt);
     final time = DateFormat('HH:mm').format(summary.startsAt);
+    // Usata sia dalla riga dei chip (per decidere il colore dello stato, a
+    // valle) sia dal testo dei posti sotto la barra di riempimento: tenerla
+    // qui evita di ricalcolare lo stesso confronto due volte.
+    final isFull =
+        summary.maxPlayers > 0 && summary.goingCount >= summary.maxPlayers;
     return DefaultTabController(
       length: 3,
       child: NestedScrollView(
@@ -168,13 +173,21 @@ class _MatchContent extends StatelessWidget {
                       ],
                       Wrap(
                         spacing: 8,
+                        runSpacing: 8,
                         children: [
+                          // Lo stato viene prima del formato: è l'unico dei
+                          // chip che cambia nel tempo (aperta -> completa ->
+                          // conclusa/annullata), quindi è quello che l'occhio
+                          // deve trovare per primo. Una pillola colorata al
+                          // posto del Chip grigio standard, con la stessa
+                          // "voce" delle pillole di risposta/distanza usate
+                          // dalla card partite in lista.
+                          _StatusPill(status: summary.status),
                           Chip(
                             label: Text(
                               summary.footballFormat.replaceAll('v', ' vs '),
                             ),
                           ),
-                          Chip(label: Text(_statusLabel(summary.status))),
                           if (match.fieldBookedAt != null)
                             const Chip(
                               backgroundColor: AppTheme.primary,
@@ -238,11 +251,23 @@ class _MatchContent extends StatelessWidget {
                         borderRadius: BorderRadius.circular(99),
                       ),
                       const SizedBox(height: 7),
+                      // Stesso linguaggio della card della lista partite
+                      // (MatchCard in core/widgets/common.dart): "posti
+                      // liberi" invece del solo conteggio, verde e in
+                      // grassetto quando è piena. Prima c'era sempre e solo
+                      // "x/y confermati" in grigio, anche a posti esauriti,
+                      // quindi lista e dettaglio raccontavano la stessa cosa
+                      // con due voci diverse.
                       Text(
-                        '${summary.goingCount}/${summary.maxPlayers} confermati',
-                        style: const TextStyle(
-                          color: AppTheme.muted,
+                        isFull
+                            ? 'Al completo · ${summary.goingCount}/${summary.maxPlayers}'
+                            : '${summary.goingCount}/${summary.maxPlayers} confermati · ${summary.maxPlayers - summary.goingCount} posti liberi',
+                        style: TextStyle(
+                          color: isFull ? AppTheme.primary : AppTheme.muted,
                           fontSize: 12,
+                          fontWeight: isFull
+                              ? FontWeight.w800
+                              : FontWeight.w500,
                         ),
                       ),
                     ],
@@ -293,9 +318,79 @@ class _MatchTabDelegate extends SliverPersistentHeaderDelegate {
     BuildContext context,
     double shrinkOffset,
     bool overlapsContent,
-  ) => ColoredBox(color: AppTheme.background, child: tabBar);
+  ) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppTheme.background,
+      // Ombra solo quando c'è contenuto che scorre sotto la barra: è il
+      // segnale che comunica "sei agganciata in cima", non decorazione
+      // fissa. Con l'ombra sempre presente, a pagina appena aperta (nulla
+      // ancora scrollato) sembrerebbe un difetto di rendering.
+      boxShadow: overlapsContent
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .28),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ]
+          : null,
+    ),
+    child: tabBar,
+  );
   @override
   bool shouldRebuild(_MatchTabDelegate oldDelegate) => false;
+}
+
+/// Pillola di stato colorata per l'intestazione del dettaglio partita.
+///
+/// Stessa forma delle pillole di risposta/distanza di [MatchCard] (radius a
+/// pillola, colore pieno sul testo, sfondo tenue): è il modo in cui la
+/// testata del dettaglio parla la stessa lingua visiva della card in lista,
+/// invece del Chip grigio generico che c'era prima e che rendeva "aperta",
+/// "completa" e "annullata" tutte uguali a un primo sguardo.
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final String status;
+
+  Color get _color => switch (status) {
+    'open' => AppTheme.primary,
+    'full' => AppTheme.gold,
+    'cancelled' => AppTheme.danger,
+    _ => AppTheme.muted, // 'completed' e stati non previsti
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _color;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _statusLabel(status),
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DetailsTab extends StatelessWidget {
