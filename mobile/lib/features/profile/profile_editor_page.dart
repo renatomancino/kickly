@@ -473,12 +473,11 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
     );
     if (image == null) return;
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
     if (bytes.length > 5 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La foto deve pesare meno di 5 MB.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La foto deve pesare meno di 5 MB.')),
+      );
       return;
     }
     setState(() {

@@ -316,12 +316,11 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
     );
     if (image == null) return;
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
     if (bytes.length > 5 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Il logo deve pesare meno di 5 MB.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Il logo deve pesare meno di 5 MB.')),
+      );
       return;
     }
     setState(() {

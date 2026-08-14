@@ -47,6 +47,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _reload() async {
+    // Chiamata anche da _markAll() dopo un await di rete: senza questo
+    // controllo, se l'utente lascia la pagina mentre "Leggi tutte" è in
+    // corso, AppScope.of(context) qui sotto leggerebbe un context non più
+    // valido.
+    if (!mounted) return;
     final next = AppScope.of(context).repository.getNotifications();
     // Blocco, non arrow-expression: `() => _future = next` come closure
     // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
@@ -77,7 +82,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   Future<void> _markAll() async {
     await AppScope.of(context).repository.markAllNotificationsRead();
-    await _reload();
+    if (mounted) await _reload();
   }
 
   @override

@@ -48,12 +48,14 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
     try {
       final preview = await AppScope.of(context).repository
           .getInvitePreview(_code.text);
-      setState(() {
-        _preview = preview;
-        if (preview == null) _error = 'Codice non valido o scaduto.';
-      });
+      if (mounted) {
+        setState(() {
+          _preview = preview;
+          if (preview == null) _error = 'Codice non valido o scaduto.';
+        });
+      }
     } catch (error) {
-      setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -68,7 +70,7 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
       final slug = await AppScope.of(context).repository.joinLeague(_code.text);
       if (mounted) context.go('/leagues/$slug');
     } catch (error) {
-      setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

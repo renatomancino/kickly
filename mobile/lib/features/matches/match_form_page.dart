@@ -113,7 +113,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startsAt),
     );
-    if (time == null) return;
+    if (time == null || !mounted) return;
     setState(
       () => _startsAt = DateTime(
         date.year,
@@ -210,7 +210,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
       }
       if (mounted) context.go('/matches/$matchId');
     } catch (error) {
-      setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -232,12 +232,11 @@ class _MatchFormPageState extends State<MatchFormPage> {
     );
     if (image == null) return;
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
     if (bytes.length > 8 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La foto deve pesare meno di 8 MB.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La foto deve pesare meno di 8 MB.')),
+      );
       return;
     }
     final extension = image.name.split('.').last;

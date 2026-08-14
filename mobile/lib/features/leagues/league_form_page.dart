@@ -38,6 +38,7 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
     );
     if (image == null) return;
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
     if (bytes.length > 5 * 1024 * 1024) {
       setState(() => _error = 'Il logo deve pesare meno di 5 MB.');
       return;
@@ -86,7 +87,7 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
       );
       if (mounted) context.go('/leagues/$slug');
     } catch (error) {
-      setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
