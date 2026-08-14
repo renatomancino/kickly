@@ -54,7 +54,11 @@ class NotificationService {
     if (_ready) return;
 
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      // Icona di stato dedicata (drawable/ic_stat_kickly, silhouette bianca
+      // trasparente della "K"), non l'icona a colori dell'app: Android
+      // pretende un monocromatico per la status bar e sagoma da solo
+      // qualunque altra cosa gli si passi, di norma male.
+      android: AndroidInitializationSettings('ic_stat_kickly'),
       iOS: DarwinInitializationSettings(
         // I permessi li chiediamo dopo il login, non al primo avvio: chiederli
         // sulla schermata di accesso significa quasi sempre un "non consentire".
