@@ -36,14 +36,20 @@ flutter run --dart-define-from-file=config.local.json
 Build Android:
 
 ```powershell
-flutter build appbundle --release --dart-define-from-file=config.local.json
+flutter build appbundle --release --dart-define-from-file=config.local.json --obfuscate --split-debug-info=build/debug-info
 ```
 
 Build iOS (da macOS con Xcode):
 
 ```bash
-flutter build ipa --release --dart-define-from-file=config.local.json
+flutter build ipa --release --dart-define-from-file=config.local.json --obfuscate --split-debug-info=build/debug-info
 ```
+
+`--obfuscate` rinomina simboli e classi Dart nel binario compilato (più
+difficile da decompilare/reverse-engineerare); `--split-debug-info` sposta le
+mappe di simboli fuori dal pacchetto distribuito, in `build/debug-info`
+(ignorato da git — vanno conservate da parte per poter poi decodificare gli
+stack trace dei crash in produzione, altrimenti sono illeggibili).
 
 Senza configurazione Supabase l'app offre una modalità demo locale dal login.
 
@@ -186,6 +192,9 @@ livelli sopra.
   di risoluzione) e concedono `execute` solo a `authenticated`, mai a `anon`.
   Non è cambiato nulla qui, ma vale la pena saperlo prima di aggiungerne di
   nuove.
+- **Build di release offuscate.** `--obfuscate --split-debug-info` (vedi sopra)
+  su Android e iOS: senza, chiunque può decompilare l'APK/IPA e leggere nomi
+  di classi/metodi/stringhe quasi come nel sorgente originale.
 
 Cosa manca volutamente, e perché: niente certificate pinning (aggiunge
 fragilità ad ogni rotazione del certificato TLS, senza un threat model

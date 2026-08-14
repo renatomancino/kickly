@@ -24,10 +24,9 @@ const _kNotchMargin = 7.0;
 const _kFabCenterY = _kBarHeight / 2 - 16;
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.location, required this.child});
+  const AppShell({super.key, required this.navigationShell});
 
-  final String location;
-  final Widget child;
+  final StatefulNavigationShell navigationShell;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -77,45 +76,33 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  int get _selectedIndex {
-    if (widget.location.startsWith('/leagues')) return 1;
-    if (widget.location.startsWith('/matches')) return 2;
-    if (widget.location.startsWith('/profile')) return 3;
-    return 0;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(bottom: false, child: widget.child),
-      bottomNavigationBar: _KicklyBottomBar(selectedIndex: _selectedIndex),
+      body: SafeArea(bottom: false, child: widget.navigationShell),
+      bottomNavigationBar: _KicklyBottomBar(
+        navigationShell: widget.navigationShell,
+      ),
     );
   }
 }
 
 class _KicklyBottomBar extends StatelessWidget {
-  const _KicklyBottomBar({required this.selectedIndex});
-  final int selectedIndex;
+  const _KicklyBottomBar({required this.navigationShell});
+  final StatefulNavigationShell navigationShell;
 
   @override
   Widget build(BuildContext context) {
     const items = [
-      (Icons.home_outlined, Icons.home, 'Home', '/dashboard'),
-      (
-        Icons.calendar_month_outlined,
-        Icons.calendar_month,
-        'Partite',
-        '/matches',
-      ),
-      (Icons.shield_outlined, Icons.shield, 'Leghe', '/leagues'),
-      (Icons.person_outline, Icons.person, 'Profilo', '/profile'),
+      (Icons.home_outlined, Icons.home, 'Home'),
+      (Icons.calendar_month_outlined, Icons.calendar_month, 'Partite'),
+      (Icons.shield_outlined, Icons.shield, 'Leghe'),
+      (Icons.person_outline, Icons.person, 'Profilo'),
     ];
-    // The route order in the original shell was Home, Leagues, Matches, Profile.
-    final active = switch (selectedIndex) {
-      1 => 2,
-      2 => 1,
-      _ => selectedIndex,
-    };
+    // I branch di StatefulShellRoute sono dichiarati in app.dart nello stesso
+    // ordine di questa lista (Home, Partite, Leghe, Profilo): l'indice del
+    // branch attivo è già l'indice giusto in `items`, nessun remap.
+    final active = navigationShell.currentIndex;
     // Slot nella Row: 5 in tutto (4 item + il "+" al centro). L'item attivo
     // dopo lo slot del "+" scala di uno per restare allineato alla Row.
     const slots = 5;
@@ -194,7 +181,7 @@ class _KicklyBottomBar extends StatelessWidget {
             Row(
               children: [
                 for (var i = 0; i < 2; i++)
-                  Expanded(child: _item(context, items[i], i == active)),
+                  Expanded(child: _item(items[i], i, i == active)),
                 Expanded(
                   // Stesso spostamento verticale (_kFabCenterY) usato da
                   // _NotchedBarPainter per calcolare il morso: se cambia uno
@@ -241,7 +228,7 @@ class _KicklyBottomBar extends StatelessWidget {
                   ),
                 ),
                 for (var i = 2; i < items.length; i++)
-                  Expanded(child: _item(context, items[i], i == active)),
+                  Expanded(child: _item(items[i], i, i == active)),
               ],
             ),
           ],
@@ -251,14 +238,18 @@ class _KicklyBottomBar extends StatelessWidget {
   }
 
 
-  Widget _item(
-    BuildContext context,
-    (IconData, IconData, String, String) item,
-    bool active,
-  ) {
+  Widget _item((IconData, IconData, String) item, int index, bool active) {
     return InkWell(
       borderRadius: BorderRadius.circular(999),
-      onTap: () => context.go(item.$4),
+      // goBranch (non context.go) è quello che preserva lo stack di
+      // navigazione e lo scroll di ogni tab. `initialLocation: true` solo
+      // quando si ritocca la tab già attiva: risponde al pattern comune
+      // "tap sulla tab corrente = torna in cima allo stack di quella tab",
+      // altrimenti restare sul branch attivo non farebbe nulla.
+      onTap: () => navigationShell.goBranch(
+        index,
+        initialLocation: index == navigationShell.currentIndex,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
