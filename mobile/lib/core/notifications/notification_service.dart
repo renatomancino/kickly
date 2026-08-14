@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../data/models.dart';
+import '../theme/app_theme.dart';
 
 /// Mostra le notifiche Kickly come banner di sistema.
 ///
@@ -169,17 +169,29 @@ class NotificationService {
           _channel.id,
           _channel.name,
           channelDescription: _channel.description,
+          // `importance`/`priority` duplicano quanto già impostato sul canale:
+          // dal Oreo (API 26) in poi è il canale a comandare, ma questi due
+          // campi restano l'unico modo per farlo funzionare anche sulle
+          // versioni di Android precedenti, dove i canali non esistono.
+          // Restiamo su `high` (banner + suono) e non `max`: nessuna delle
+          // notifiche Kickly è così urgente da giustificare l'interruzione
+          // "a tutto schermo" che Android riserva alla priorità massima.
           importance: Importance.high,
           priority: Priority.high,
-          // Verde Kickly, coerente con il colore già dichiarato nel manifest.
-          color: const Color(0xFFC7FF3D),
+          // Verde Kickly: preso da AppTheme invece di ripetere l'esadecimale,
+          // così se il brand color cambia non resta disallineato qui.
+          color: AppTheme.primary,
           // Il corpo può superare la riga singola: così resta leggibile aperto.
           styleInformation: BigTextStyleInformation(body),
         ),
-        iOS: const DarwinNotificationDetails(
+        iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          // Raggruppa i banner Kickly in un unico thread nel Centro
+          // Notifiche di iOS invece di lasciarli sparsi: stesso effetto del
+          // canale unico su Android, ottenuto qui riusando lo stesso id.
+          threadIdentifier: _channel.id,
         ),
       ),
       payload: link,
