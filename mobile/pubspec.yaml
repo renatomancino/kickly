@@ -67,6 +67,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -143,3 +144,36 @@ flutter_launcher_icons:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Splash screen nativo (Android/iOS), generato da `dart run
+# flutter_native_splash:create`. Sostituisce lo sfondo bianco/nero di
+# default che il sistema operativo mostra PRIMA che il motore Flutter sia
+# pronto a disegnare il primo frame: senza questo pacchetto non c'è alcun
+# modo di brandizzare quella schermata, perché a quel punto Dart non gira
+# ancora (è codice nativo — storyboard su iOS, drawable/tema su Android).
+flutter_native_splash:
+  # Stesso colore di `AppTheme.background` (lib/core/theme/app_theme.dart),
+  # così la schermata nativa e la prima schermata Flutter (SplashPage) sono
+  # indistinguibili e la transizione non "scatta".
+  color: "#0B0D0C"
+  # Stessa icona usata da flutter_launcher_icons qui sopra: ha già lo sfondo
+  # scuro arrotondato incorporato, quindi funziona bene sia da sola (qui)
+  # sia ritagliata in un cerchio (vedi android_12 sotto).
+  image: assets/images/kickly-icon.png
+  # Nasconde la status/notification bar durante lo splash: su Android
+  # evita che una barra di sistema "anonima" stoni con lo sfondo scuro
+  # brandizzato; su iOS è già nascosta di default.
+  fullscreen: true
+
+  # Android 12+ ha un meccanismo di splash screen diverso (SplashScreen API
+  # di sistema, non più storyboard/drawable custom) e va configurato a
+  # parte: senza questa sezione, su Android 12+ verrebbe mostrata solo
+  # l'icona di lancio su sfondo di sistema, ignorando `color`/`image` sopra.
+  android_12:
+    color: "#0B0D0C"
+    image: assets/images/kickly-icon.png
+    # Stesso colore dello sfondo generale: l'icona ha già i bordi
+    # arrotondati e lo sfondo scuro disegnati dentro l'immagine, quindi lo
+    # sfondo del cerchio Android 12 deve solo "sparire" dietro di essa
+    # invece di introdurre un colore diverso attorno.
+    icon_background_color: "#0B0D0C"

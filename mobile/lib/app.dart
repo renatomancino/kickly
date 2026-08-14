@@ -264,13 +264,24 @@ class SplashPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Questa è la schermata Flutter mostrata SUBITO dopo lo splash nativo
+    // (flutter_native_splash, vedi pubspec.yaml), mentre AppState verifica
+    // se c'è una sessione Supabase valida. Lo splash nativo mostra già
+    // KicklyMark su AppTheme.background: qui replichiamo esattamente lo
+    // stesso sfondo e lo stesso marchio (invece di un semplice spinner
+    // generico) così il passaggio nativo -> Flutter è invisibile, senza lo
+    // scatto di stile che si avrebbe con un design diverso.
     return const Scaffold(
+      backgroundColor: AppTheme.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             KicklyMark(size: 72),
             SizedBox(height: 22),
+            // Nessun colore esplicito: il tema (AppTheme.dark) imposta già
+            // primary come colore di default dello spinner, coerente con
+            // l'accento verde del marchio.
             CircularProgressIndicator(),
           ],
         ),
