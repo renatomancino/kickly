@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+// `Uint8List` arriva già da qui: `dart:typed_data` diretto non serve più
+// e l'analyzer lo segnala come import ridondante.
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-
-import 'dart:typed_data';
 
 import '../../app.dart';
 import '../../core/theme/app_theme.dart';
@@ -63,6 +64,9 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    // Riscontro tattile alla conferma di un form importante come la
+    // creazione di una lega, non su ogni tap generico del modulo.
+    HapticFeedback.lightImpact();
     setState(() {
       _loading = true;
       _error = null;
@@ -122,8 +126,11 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                               width: 62,
                               height: 62,
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary
-                                    .withValues(alpha: .12),
+                                // Token del tema invece di
+                                // Theme.of(context).colorScheme.primary: sono
+                                // lo stesso colore, ma qui si usa quello con
+                                // cui il resto del file lavora.
+                                color: AppTheme.primary.withValues(alpha: .12),
                                 borderRadius: BorderRadius.circular(17),
                                 image: _logoBytes == null
                                     ? null
@@ -274,8 +281,18 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _loading ? null : _submit,
+                      // Spinner piccolo e con colore esplicito invece di uno a
+                      // dimensione piena: quello di default usa il verde del
+                      // tema (ProgressIndicatorTheme), che su un bottone già
+                      // verde risultava quasi invisibile.
                       child: _loading
-                          ? const CircularProgressIndicator()
+                          ? const SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.onPrimary,
+                              ),
+                            )
                           : const Text('Crea lega'),
                     ),
                   ),

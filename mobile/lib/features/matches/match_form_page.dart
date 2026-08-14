@@ -1,6 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+// `Uint8List` arriva già da qui: `dart:typed_data` diretto non serve più
+// e l'analyzer lo segnala come import ridondante.
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -130,6 +131,9 @@ class _MatchFormPageState extends State<MatchFormPage> {
         _place == null) {
       return;
     }
+    // Piccolo riscontro tattile alla conferma di un form importante come
+    // questo (crea o modifica una partita), non su ogni tap generico.
+    HapticFeedback.lightImpact();
     setState(() {
       _loading = true;
       _error = null;
@@ -750,14 +754,17 @@ class _MediaPicker extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
+          // Token del tema invece degli esadecimali scritti a mano: erano
+          // uno il duplicato quasi esatto di AppTheme.surface, l'altro
+          // proprio il valore di AppTheme.primary copiato a mano.
           color: bytes == null
-              ? const Color(0xFF171B18)
+              ? AppTheme.surface
               : Colors.black.withValues(alpha: .35),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: const Color(0xFFC7FF3D)),
+            Icon(icon, color: AppTheme.primary),
             const SizedBox(height: 7),
             Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
             Text(

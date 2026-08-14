@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
@@ -80,6 +81,10 @@ class _MatchResultPageState extends State<MatchResultPage> {
       );
       return;
     }
+    // Riscontro tattile alla conferma: chiudere la partita pubblica il
+    // risultato finale a tutti i partecipanti, un momento che merita un
+    // piccolo feedback fisico come la pubblicazione di una nuova partita.
+    HapticFeedback.lightImpact();
     setState(() => _saving = true);
     try {
       await AppScope.of(context).repository.finalizeMatch(
@@ -256,7 +261,15 @@ class _MatchResultPageState extends State<MatchResultPage> {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: _saving ? null : () => _submit(match),
-                icon: const Icon(Icons.emoji_events),
+                // Stesso pattern di match_form_page.dart: l'icona diventa
+                // uno spinner compatto durante il salvataggio, invece di
+                // restare ferma mentre il bottone appare bloccato.
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.emoji_events),
                 label: Text(
                   match.postGame == null
                       ? 'Chiudi partita'
@@ -319,6 +332,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
       Row(
         children: [
           IconButton(
+            tooltip: 'Diminuisci punteggio $label',
             onPressed: value > 0 ? () => change(value - 1) : null,
             icon: const Icon(Icons.remove),
           ),
@@ -327,6 +341,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
             style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
           ),
           IconButton(
+            tooltip: 'Aumenta punteggio $label',
             onPressed: () => change(value + 1),
             icon: const Icon(Icons.add),
           ),
@@ -343,12 +358,14 @@ class _MatchResultPageState extends State<MatchResultPage> {
         children: [
           IconButton(
             visualDensity: VisualDensity.compact,
+            tooltip: 'Diminuisci $label',
             onPressed: value > 0 ? () => change(value - 1) : null,
             icon: const Icon(Icons.remove, size: 16),
           ),
           Text('$value', style: const TextStyle(fontWeight: FontWeight.w900)),
           IconButton(
             visualDensity: VisualDensity.compact,
+            tooltip: 'Aumenta $label',
             onPressed: () => change(value + 1),
             icon: const Icon(Icons.add, size: 16),
           ),

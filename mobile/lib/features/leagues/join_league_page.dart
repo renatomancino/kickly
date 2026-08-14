@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
@@ -59,6 +60,9 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
   }
 
   Future<void> _join() async {
+    // Riscontro tattile alla conferma: entrare in una lega è un cambio di
+    // stato per l'utente (diventa membro), non un tap di navigazione qualsiasi.
+    HapticFeedback.lightImpact();
     setState(() => _loading = true);
     try {
       final slug = await AppScope.of(context).repository.joinLeague(_code.text);
@@ -96,6 +100,7 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
                 decoration: InputDecoration(
                   labelText: 'Codice invito',
                   suffixIcon: IconButton(
+                    tooltip: 'Cerca lega',
                     onPressed: _loading ? null : _search,
                     icon: const Icon(Icons.search),
                   ),
@@ -151,7 +156,12 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: _preview!['already_member'] == true
+                            // Mancava il controllo su _loading: durante la
+                            // richiesta il bottone restava cliccabile e un
+                            // doppio tap poteva partire come due join
+                            // concorrenti sulla stessa lega.
+                            onPressed:
+                                _preview!['already_member'] == true || _loading
                                 ? null
                                 : _join,
                             child: Text(

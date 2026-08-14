@@ -924,7 +924,11 @@ class _LeaderboardState extends State<_Leaderboard> {
                 backgroundColor: e.$1 < 3
                     ? AppTheme.primary
                     : AppTheme.surfaceHigh,
-                foregroundColor: e.$1 < 3 ? AppTheme.background : Colors.white,
+                // Token del tema invece di Colors.white: stesso bianco quasi
+                // identico, ma coerente con il resto della palette.
+                foregroundColor: e.$1 < 3
+                    ? AppTheme.background
+                    : AppTheme.foreground,
                 child: Text(
                   '${e.$1 + 1}',
                   style: const TextStyle(fontWeight: FontWeight.w900),
@@ -976,14 +980,12 @@ class _LeagueStats extends StatelessWidget {
       children: [
         const SectionTitle(title: 'Numeri della lega', eyebrow: 'Statistiche'),
         const SizedBox(height: 12),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.35,
-          children: [
+        // StatGrid invece di un GridView.count con childAspectRatio fisso:
+        // quel rapporto legava l'altezza alla larghezza della colonna e con
+        // il font di sistema ingrandito il numero usciva dalla tessera
+        // (lo stesso problema già risolto per dashboard e profilo giocatore).
+        StatGrid(
+          tiles: [
             StatTile(
               label: 'Presenze',
               value: matches,
@@ -1074,6 +1076,10 @@ class _LeagueInfo extends StatelessWidget {
   }
 
   Future<void> _leave(BuildContext context) async {
+    // Feedback aptico prima del dialog, non dopo il tap su "Lascia": è
+    // un'azione distruttiva e qui, non nel bottone del dialog, sta il primo
+    // momento in cui l'utente segnala l'intenzione di uscire dalla lega.
+    HapticFeedback.mediumImpact();
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
