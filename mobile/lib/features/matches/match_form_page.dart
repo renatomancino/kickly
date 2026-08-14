@@ -261,7 +261,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
           future: _leaguesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
+              return const ListSkeleton(items: 3);
             }
             if (snapshot.hasError) {
               return PageFrame(
@@ -742,7 +742,7 @@ class _MediaPicker extends StatelessWidget {
       height: 120,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppTheme.outline),
         image: bytes == null
             ? null
             : DecorationImage(image: MemoryImage(bytes!), fit: BoxFit.cover),

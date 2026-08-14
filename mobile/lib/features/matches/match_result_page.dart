@@ -115,7 +115,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const ListSkeleton(items: 2);
         }
         final match = snapshot.data;
         if (match == null) {

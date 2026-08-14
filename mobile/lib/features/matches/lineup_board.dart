@@ -845,7 +845,13 @@ class _Pitch extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: .34),
                       borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: Colors.white24),
+                      // Non AppTheme.outline: qui l'etichetta sta sopra il
+                      // verde del campo, non su una superficie della card, e
+                      // le regole di contrasto sono quelle di un overlay, non
+                      // quelle del design system delle card.
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .24),
+                      ),
                     ),
                     child: Text(
                       'TEAM ${teamNumber == 1 ? 'A' : 'B'} · $formation',

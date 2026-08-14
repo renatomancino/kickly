@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Carica android/key.properties se esiste (gitignorato, va creato localmente
+// o iniettato dal CI): storeFile, storePassword, keyAlias, keyPassword. Senza
+// questo file il progetto continua a compilare firmando con la chiave di
+// debug, com'era prima — la differenza si vede solo quando qualcuno prepara
+// davvero una release, non prima.
+val keystoreProperties = Properties()
+// android/key.properties, la convenzione standard di Flutter
+// (https://flutter.dev/to/reference-keystore).
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseSigning = keystorePropertiesFile.exists()
+if (hasReleaseSigning) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
 android {
@@ -33,11 +49,29 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Con android/key.properties presente, firma con la chiave di
+            // release vera. Senza, ricade sulla chiave di debug com'era prima:
+            // `flutter run --release` continua a funzionare senza setup, ma
+            // quel build non è distribuibile su Play Store (Google rifiuta un
+            // APK/AAB firmato con la chiave di debug).
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

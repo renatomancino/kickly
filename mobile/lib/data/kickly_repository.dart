@@ -3,11 +3,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
 import '../core/notifications/background_sync.dart';
 import '../core/notifications/notification_service.dart';
+import '../core/security/oauth_nonce.dart';
 import 'demo_data.dart';
 import 'models.dart';
 
@@ -48,7 +51,113 @@ class KicklyRepository {
     );
   }
 
-  Future<void> signOut() async => client?.auth.signOut();
+  /// Accedi con Google: flusso nativo (Play Services su Android, ASWebAuth
+  /// su iOS), non un webview con schermata di consenso del browser.
+  ///
+  /// Richiede `GoogleSignIn.instance.initialize()` già completato
+  /// all'avvio dell'app (vedi main.dart) — chiamare questo metodo prima
+  /// dell'inizializzazione è un errore del chiamante, non qualcosa da cui
+  /// questo metodo può proteggere in modo sensato.
+  Future<void> signInWithGoogle() async {
+    final supabase = client;
+    if (supabase == null) return;
+    final account = await GoogleSignIn.instance.authenticate();
+    final idToken = account.authentication.idToken;
+    if (idToken == null) {
+      // In pratica non dovrebbe succedere: Google Sign-In restituisce sempre
+      // un ID token per un'autenticazione riuscita. Se capita, è più onesto
+      // fallire con un messaggio chiaro che proseguire con una sessione a
+      // metà.
+      throw const AuthException(
+        'Google non ha restituito un token valido. Riprova.',
+      );
+    }
+    await supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+    );
+  }
+
+  /// Accedi con Apple: nativo su iOS/macOS, richiesto dalle linee guida
+  /// Apple quando l'app offre anche un altro login social.
+  ///
+  /// Il nonce protegge dal replay: lo si manda hashato ad Apple, Apple lo
+  /// incorpora nell'ID token, e Supabase verifica che l'hash del nonce in
+  /// chiaro che gli mandiamo qui corrisponda — un ID token intercettato e
+  /// riproposto in un'altra sessione non avrebbe il nonce giusto.
+  Future<void> signInWithApple() async {
+    final supabase = client;
+    if (supabase == null) return;
+    final nonce = OAuthNonce.generate();
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: const [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: nonce.hashed,
+    );
+    final idToken = credential.identityToken;
+    if (idToken == null) {
+      throw const AuthException(
+        'Apple non ha restituito un token valido. Riprova.',
+      );
+    }
+    await supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+      nonce: nonce.raw,
+    );
+    // Apple manda nome e cognome solo alla primissima autorizzazione fra
+    // questo utente e questa app: se non li salviamo ora, il modo per
+    // recuperarli è chiedere all'utente di reinserirli a mano, perché Apple
+    // non li ripropone più nelle autenticazioni successive. L'onboarding
+    // (ProfileEditorPage) mostra comunque i campi nome/cognome per chi non li
+    // ha già compilati, quindi qui è solo una precompilazione best-effort,
+    // non l'unica via per completare il profilo.
+    final firstName = credential.givenName;
+    final lastName = credential.familyName;
+    if (firstName != null || lastName != null) {
+      try {
+        final userId = currentUserId;
+        if (userId != null) {
+          final existing = await supabase
+              .from('profiles')
+              .select('first_name, last_name')
+              .eq('id', userId)
+              .maybeSingle();
+          final hasName =
+              (existing?['first_name'] as String?)?.isNotEmpty == true;
+          if (!hasName) {
+            await supabase
+                .from('profiles')
+                .update({'first_name': ?firstName, 'last_name': ?lastName})
+                .eq('id', userId);
+          }
+        }
+      } catch (error) {
+        // Precompilazione best-effort: se fallisce, l'utente compila comunque
+        // il nome in onboarding. Non deve bloccare il login.
+        debugPrint('Precompilazione nome da Apple non riuscita: $error');
+      }
+    }
+  }
+
+  Future<void> signOut() async {
+    final supabase = client;
+    if (supabase == null) return;
+    await supabase.auth.signOut();
+    // Chiude anche la sessione nativa di Google: senza questo, al prossimo
+    // avvio Play Services potrebbe riselezionare in automatico lo stesso
+    // account senza mostrare il selettore, e "Esci" da Kickly non
+    // corrisponderebbe più a "sei uscito" per l'utente. Se Google Sign-In
+    // non è configurato o non è mai stato inizializzato, questa chiamata
+    // fallisce e il catch la rende un no-op innocuo.
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (error) {
+      debugPrint('Sign out da Google non riuscito: $error');
+    }
+  }
 
   Future<void> updatePassword(String password) async {
     if (isDemo) return;

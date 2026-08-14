@@ -31,7 +31,16 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
 
   Future<void> _reload() async {
     final next = AppScope.of(context).repository.getMatch(widget.matchId);
-    setState(() => _future = next);
+    // Blocco, non arrow-expression: `() => _future = next` come closure
+    // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
+    // Future stessa. setState() se ne accorge in debug e lancia *dopo* aver
+    // già assegnato il campo ma *prima* di schedulare il rebuild, quindi il
+    // resto della funzione (l'`await next` sotto) non gira più: la pagina
+    // restava agganciata alla vecchia Future finché qualcos'altro non la
+    // ricostruiva per altri motivi.
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -1002,9 +1011,8 @@ class _FieldBookingCardState extends State<_FieldBookingCard> {
     if (accepted != true || !mounted) return;
     setState(() => _loading = true);
     try {
-      final bookedAt = await AppScope.of(
-        context,
-      ).repository.confirmFieldBooking(widget.match.summary.id);
+      final bookedAt = await AppScope.of(context).repository
+          .confirmFieldBooking(widget.match.summary.id);
       if (!mounted) return;
       // La card passa subito allo stato "prenotato" con il timestamp del
       // server, senza dipendere dal ricaricamento della pagina.
@@ -1115,7 +1123,6 @@ class _PlayersTab extends StatelessWidget {
     );
   }
 }
-
 
 String _statusLabel(String status) => switch (status) {
   'open' => 'Iscrizioni aperte',

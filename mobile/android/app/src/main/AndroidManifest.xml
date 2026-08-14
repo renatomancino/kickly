@@ -1,10 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- allowBackup=false: senza, Android includerebbe l'app nel backup
+         automatico su Google Drive e nel trasferimento dati fra dispositivi.
+         La sessione ora vive in Keystore (vedi SecureSessionStorage) e non
+         verrebbe comunque decifrata su un device diverso, ma è più semplice
+         escluderla del tutto dal backup che fidarsi che nessun'altra
+         preferenza sensibile finisca mai in SharedPreferences per errore. -->
     <application
         android:label="Kickly"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <!-- FCM uses the Kickly mark and brand green when Firebase credentials are added. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

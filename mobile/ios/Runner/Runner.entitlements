@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Richiesto da sign_in_with_apple. Perché la firma funzioni davvero su
+	     un dispositivo reale o in App Store Connect, la capability "Sign In
+	     with Apple" va abilitata anche sull'App ID com.kickly.app nel
+	     portale Apple Developer: il file da solo non basta, va dichiarata
+	     anche lato Apple. Vedi README per i passi completi. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>

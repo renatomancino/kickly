@@ -1,5 +1,11 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart'
+    show GoogleSignInException, GoogleSignInExceptionCode;
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../app.dart';
 import '../../core/theme/app_theme.dart';
@@ -24,6 +30,12 @@ class _AuthPageState extends State<AuthPage> {
   bool _loading = false;
   bool _obscure = true;
   String? _message;
+
+  /// Sign in with Apple è nativo su iOS, dove le linee guida App Store lo
+  /// rendono di fatto obbligatorio non appena si offre un altro login
+  /// social. Il pacchetto supporterebbe anche un flusso web su Android, ma
+  /// Kickly non compila un target macOS/web: qui basta la piattaforma.
+  bool get _showAppleButton => !kIsWeb && Platform.isIOS;
 
   @override
   void dispose() {
@@ -87,6 +99,35 @@ class _AuthPageState extends State<AuthPage> {
         case AuthVariant.updatePassword:
           await scope.repository.updatePassword(_passwordController.text);
           if (mounted) context.go('/dashboard');
+      }
+    } catch (error) {
+      setState(() => _message = friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Esegue un accesso social (Google o Apple) condividendo lo stesso stato
+  /// di caricamento/errore del form email+password, così i due percorsi non
+  /// possono mai risultare attivi insieme.
+  Future<void> _signInWithProvider(Future<void> Function() action) async {
+    final scope = AppScope.of(context);
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      await action();
+      await scope.appState.refreshSession();
+    } on GoogleSignInException catch (error) {
+      // L'utente ha chiuso il selettore account: non è un errore da
+      // mostrare, è la scelta di non accedere.
+      if (error.code != GoogleSignInExceptionCode.canceled) {
+        setState(() => _message = friendlyError(error));
+      }
+    } on SignInWithAppleAuthorizationException catch (error) {
+      if (error.code != AuthorizationErrorCode.canceled) {
+        setState(() => _message = friendlyError(error));
       }
     } catch (error) {
       setState(() => _message = friendlyError(error));
@@ -233,7 +274,7 @@ class _AuthPageState extends State<AuthPage> {
                       ),
                       child: Text(
                         _message!,
-                        style: const TextStyle(color: Colors.white70),
+                        style: const TextStyle(color: AppTheme.foreground),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -256,6 +297,48 @@ class _AuthPageState extends State<AuthPage> {
                       }),
                     ),
                   ),
+                  // Solo su login/signup: su "password dimenticata" e
+                  // "aggiorna password" un login social non ha senso — non
+                  // esiste una password da recuperare o cambiare.
+                  if ((widget.variant == AuthVariant.login ||
+                          widget.variant == AuthVariant.signup) &&
+                      (scope.config.hasGoogleSignIn || _showAppleButton)) ...[
+                    const SizedBox(height: 22),
+                    const _OrDivider(),
+                    const SizedBox(height: 18),
+                    if (scope.config.hasGoogleSignIn)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _loading
+                              ? null
+                              : () => _signInWithProvider(
+                                  scope.repository.signInWithGoogle,
+                                ),
+                          icon: const _GoogleMark(),
+                          label: const Text('Continua con Google'),
+                        ),
+                      ),
+                    if (_showAppleButton) ...[
+                      if (scope.config.hasGoogleSignIn)
+                        const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: SignInWithAppleButton(
+                          onPressed: _loading
+                              ? null
+                              : () => _signInWithProvider(
+                                  scope.repository.signInWithApple,
+                                ),
+                          style: SignInWithAppleButtonStyle.white,
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMd,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                   if (scope.repository.isDemo &&
                       widget.variant == AuthVariant.login) ...[
                     const SizedBox(height: 12),
@@ -300,4 +383,58 @@ class _AuthPageState extends State<AuthPage> {
       ),
     );
   }
+}
+
+/// Separatore "oppure" fra il form email/password e i login social.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      const Expanded(child: Divider(color: AppTheme.outline)),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text(
+          'oppure',
+          style: TextStyle(
+            color: AppTheme.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      const Expanded(child: Divider(color: AppTheme.outline)),
+    ],
+  );
+}
+
+/// "G" di Google in un cerchio bianco, come icona del pulsante di accesso.
+///
+/// Non è il logomark ufficiale a quattro colori (per quello servirebbe
+/// l'asset esatto di Google), ma una resa volutamente semplice: un cerchio
+/// bianco con la lettera nel blu del brand è una convenzione diffusa e
+/// riconoscibile quando l'asset ufficiale non è incluso nel progetto.
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 20,
+    height: 20,
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+    ),
+    child: const Text(
+      'G',
+      style: TextStyle(
+        color: Color(0xFF4285F4), // Google Blue.
+        fontSize: 13,
+        fontWeight: FontWeight.w900,
+        height: 1,
+      ),
+    ),
+  );
 }

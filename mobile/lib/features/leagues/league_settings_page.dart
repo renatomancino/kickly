@@ -84,40 +84,11 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
   }
 
   Future<void> delete(LeagueDetail league) async {
-    final confirmation = TextEditingController();
     final accepted = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Eliminare definitivamente la lega?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Questa azione non è reversibile. Digita “${league.summary.name}” per confermare.',
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: confirmation,
-              decoration: InputDecoration(hintText: league.summary.name),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              confirmation.text == league.summary.name,
-            ),
-            child: const Text('Elimina'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) =>
+          _DeleteLeagueDialog(expectedName: league.summary.name),
     );
-    confirmation.dispose();
     if (accepted != true || !mounted) return;
     await AppScope.of(context).repository.deleteLeague(league.summary.id);
     if (mounted) context.go('/leagues');
@@ -130,7 +101,7 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const ListSkeleton(items: 2);
         }
         final league = snapshot.data;
         if (league == null || !league.summary.canManage) {
@@ -358,4 +329,56 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
       logoExtension = image.name.split('.').last;
     });
   }
+}
+
+// Widget dedicato (non un TextEditingController locale distrutto subito
+// dopo l'await di showDialog) cosi il controller vive quanto l'Element del
+// dialog: evita il crash "TextEditingController was used after being
+// disposed" che puo' scattare durante l'animazione di chiusura.
+class _DeleteLeagueDialog extends StatefulWidget {
+  const _DeleteLeagueDialog({required this.expectedName});
+  final String expectedName;
+  @override
+  State<_DeleteLeagueDialog> createState() => _DeleteLeagueDialogState();
+}
+
+class _DeleteLeagueDialogState extends State<_DeleteLeagueDialog> {
+  final _confirmation = TextEditingController();
+
+  @override
+  void dispose() {
+    _confirmation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Eliminare definitivamente la lega?'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Questa azione non è reversibile. Digita “${widget.expectedName}” per confermare.',
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _confirmation,
+          decoration: InputDecoration(hintText: widget.expectedName),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context, false),
+        child: const Text('Annulla'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(
+          context,
+          _confirmation.text == widget.expectedName,
+        ),
+        child: const Text('Elimina'),
+      ),
+    ],
+  );
 }
