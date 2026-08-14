@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -23,7 +24,16 @@ class _LeaguesPageState extends State<LeaguesPage> {
 
   Future<void> _refresh() async {
     final next = AppScope.of(context).repository.getLeagues();
-    setState(() => _future = next);
+    // Blocco, non arrow-expression: `() => _future = next` come closure
+    // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
+    // Future stessa. setState() se ne accorge in debug e lancia *dopo* aver
+    // già assegnato il campo ma *prima* di schedulare il rebuild, quindi il
+    // resto della funzione (l'`await next` sotto) non gira più: la pagina
+    // restava agganciata alla vecchia Future finché qualcos'altro non la
+    // ricostruiva per altri motivi.
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -47,7 +57,7 @@ class _LeaguesPageState extends State<LeaguesPage> {
                     const SizedBox(height: 5),
                     const Text(
                       'Squadre, calendario e rivalità.',
-                      style: TextStyle(color: Colors.white54),
+                      style: TextStyle(color: AppTheme.muted),
                     ),
                   ],
                 ),
@@ -79,9 +89,13 @@ class _LeaguesPageState extends State<LeaguesPage> {
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 90),
-                  child: Center(child: CircularProgressIndicator()),
+                // Column e non ListSkeleton: siamo già dentro una ListView.
+                return const Column(
+                  children: [
+                    CardSkeleton(height: 70, lines: 2),
+                    SizedBox(height: 12),
+                    CardSkeleton(height: 70, lines: 2),
+                  ],
                 );
               }
               if (snapshot.hasError) {
@@ -139,7 +153,7 @@ class _LeaguesPageState extends State<LeaguesPage> {
                                         Text(
                                           '${league.city}, ${league.country}',
                                           style: const TextStyle(
-                                            color: Colors.white54,
+                                            color: AppTheme.muted,
                                           ),
                                         ),
                                         const SizedBox(height: 8),
@@ -153,14 +167,10 @@ class _LeaguesPageState extends State<LeaguesPage> {
                                             ),
                                             Chip(
                                               label: Text(
-                                                '${league.memberCount} membri',
+                                                league.memberCountLabel,
                                               ),
                                             ),
-                                            Chip(
-                                              label: Text(
-                                                league.currentUserRole,
-                                              ),
-                                            ),
+                                            Chip(label: Text(league.roleLabel)),
                                           ],
                                         ),
                                       ],

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 
 import '../../app.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 
 class LeagueFormPage extends StatefulWidget {
@@ -106,7 +107,7 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                   const SizedBox(height: 7),
                   const Text(
                     'Imposta le regole base. Potrai invitare i giocatori subito dopo.',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: AppTheme.muted),
                   ),
                   const SizedBox(height: 25),
                   Card(
@@ -150,7 +151,7 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                                   Text(
                                     'JPG, PNG o WebP · max 5 MB',
                                     style: TextStyle(
-                                      color: Colors.white54,
+                                      color: AppTheme.muted,
                                       fontSize: 11,
                                     ),
                                   ),

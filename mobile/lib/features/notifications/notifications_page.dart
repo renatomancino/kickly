@@ -48,7 +48,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   Future<void> _reload() async {
     final next = AppScope.of(context).repository.getNotifications();
-    setState(() => _future = next);
+    // Blocco, non arrow-expression: `() => _future = next` come closure
+    // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
+    // Future stessa. setState() se ne accorge in debug e lancia *dopo* aver
+    // già assegnato il campo ma *prima* di schedulare il rebuild, quindi il
+    // resto della funzione (l'`await next` sotto) non gira più: la pagina
+    // restava agganciata alla vecchia Future finché qualcos'altro non la
+    // ricostruiva per altri motivi.
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -87,7 +96,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
+                return const ListSkeleton(items: 3);
               }
               if (snapshot.hasError) {
                 return ListView(
@@ -142,7 +151,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 _iconFor(item.type),
                                 color: unread
                                     ? AppTheme.primary
-                                    : Colors.white54,
+                                    : AppTheme.muted,
                               ),
                             ),
                             const SizedBox(width: 13),
@@ -173,7 +182,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   Text(
                                     item.body,
                                     style: const TextStyle(
-                                      color: Colors.white60,
+                                      color: AppTheme.muted,
                                     ),
                                   ),
                                   const SizedBox(height: 8),
@@ -183,7 +192,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                       'it_IT',
                                     ).format(item.createdAt),
                                     style: const TextStyle(
-                                      color: Colors.white38,
+                                      color: AppTheme.mutedSoft,
                                       fontSize: 11,
                                     ),
                                   ),

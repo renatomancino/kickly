@@ -8,6 +8,7 @@ import '../../app.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
+import 'lineup_board.dart';
 
 class MatchDetailPage extends StatefulWidget {
   const MatchDetailPage({super.key, required this.matchId});
@@ -30,7 +31,16 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
 
   Future<void> _reload() async {
     final next = AppScope.of(context).repository.getMatch(widget.matchId);
-    setState(() => _future = next);
+    // Blocco, non arrow-expression: `() => _future = next` come closure
+    // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
+    // Future stessa. setState() se ne accorge in debug e lancia *dopo* aver
+    // già assegnato il campo ma *prima* di schedulare il rebuild, quindi il
+    // resto della funzione (l'`await next` sotto) non gira più: la pagina
+    // restava agganciata alla vecchia Future finché qualcos'altro non la
+    // ricostruiva per altri motivi.
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -64,7 +74,7 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
+              return const ListSkeleton(items: 2);
             }
             if (snapshot.hasError) {
               return PageFrame(
@@ -190,7 +200,7 @@ class _MatchContent extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         summary.leagueName,
-                        style: const TextStyle(color: Colors.white54),
+                        style: const TextStyle(color: AppTheme.muted),
                       ),
                       const SizedBox(height: 20),
                       Row(
@@ -231,7 +241,7 @@ class _MatchContent extends StatelessWidget {
                       Text(
                         '${summary.goingCount}/${summary.maxPlayers} confermati',
                         style: const TextStyle(
-                          color: Colors.white54,
+                          color: AppTheme.muted,
                           fontSize: 12,
                         ),
                       ),
@@ -263,7 +273,7 @@ class _MatchContent extends StatelessWidget {
               onReload: onReload,
             ),
             _PlayersTab(participants: match.participants),
-            _InteractiveLineupTab(match: match),
+            LineupBoard(match: match),
           ],
         ),
       ),
@@ -324,7 +334,7 @@ class _DetailsTab extends StatelessWidget {
                   const SizedBox(height: 5),
                   const Text(
                     'Entra nella lega per confermare la presenza e scegliere la formazione.',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: AppTheme.muted),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -368,7 +378,7 @@ class _DetailsTab extends StatelessWidget {
                   const SizedBox(height: 6),
                   const Text(
                     'Team A   ·   Team B',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: AppTheme.muted),
                   ),
                   const Divider(height: 28),
                   if (match.postGame!.mvpFinalizedAt != null) ...[
@@ -384,7 +394,7 @@ class _DetailsTab extends StatelessWidget {
                     ),
                     const Text(
                       'MVP della partita',
-                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                      style: TextStyle(color: AppTheme.muted, fontSize: 11),
                     ),
                   ] else ...[
                     const Text(
@@ -566,7 +576,7 @@ class _DetailsTab extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     match.description!,
-                    style: const TextStyle(color: Colors.white60),
+                    style: const TextStyle(color: AppTheme.muted),
                   ),
                 ],
                 const Divider(height: 30),
@@ -785,7 +795,7 @@ class _ResponseButton extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, color: selected ? AppTheme.primary : Colors.white60),
+          Icon(icon, color: selected ? AppTheme.primary : AppTheme.muted),
           const SizedBox(height: 6),
           Text(
             label,
@@ -819,19 +829,42 @@ class _FieldBookingCard extends StatefulWidget {
 class _FieldBookingCardState extends State<_FieldBookingCard> {
   bool _loading = false;
 
+  /// Istante della prenotazione, tenuto localmente.
+  ///
+  /// La card si aggiorna dal valore restituito dalla RPC invece di aspettare
+  /// che l'intera pagina si ricarichi: il ricaricamento resta (serve per il
+  /// badge "Campo prenotato" nell'intestazione) ma non è più l'unica cosa che
+  /// fa cambiare stato a questa card.
+  DateTime? _bookedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _bookedAt = widget.match.fieldBookedAt;
+  }
+
+  @override
+  void didUpdateWidget(_FieldBookingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Se il ricaricamento porta un dato più fresco, vince quello del server.
+    final incoming = widget.match.fieldBookedAt;
+    if (incoming != null && incoming != _bookedAt) _bookedAt = incoming;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final booked = widget.match.fieldBookedAt != null;
+    final bookedAt = _bookedAt;
+    final booked = bookedAt != null;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: booked
-            ? AppTheme.primary.withValues(alpha: .12)
+            ? AppTheme.primary.withValues(alpha: .1)
             : AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(
           color: booked
-              ? AppTheme.primary.withValues(alpha: .55)
+              ? AppTheme.primary.withValues(alpha: .5)
               : AppTheme.outline,
         ),
       ),
@@ -839,10 +872,11 @@ class _FieldBookingCardState extends State<_FieldBookingCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
                 backgroundColor: AppTheme.primary,
-                foregroundColor: AppTheme.background,
+                foregroundColor: AppTheme.onPrimary,
                 child: Icon(booked ? Icons.verified : Icons.stadium_outlined),
               ),
               const SizedBox(width: 12),
@@ -857,15 +891,13 @@ class _FieldBookingCardState extends State<_FieldBookingCard> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    const SizedBox(height: 3),
                     Text(
-                      booked
-                          ? 'Prenotazione confermata a tutti i partecipanti.'
-                          : widget.canBook
-                          ? 'Chiama la struttura e poi conferma la prenotazione.'
-                          : 'Disponibile dopo aver confermato la presenza.',
+                      _subtitle(booked),
                       style: const TextStyle(
-                        color: Colors.white60,
+                        color: AppTheme.muted,
                         fontSize: 12,
+                        height: 1.4,
                       ),
                     ),
                   ],
@@ -875,36 +907,75 @@ class _FieldBookingCardState extends State<_FieldBookingCard> {
           ),
           if (widget.canBook) ...[
             const SizedBox(height: 15),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _call,
-                    icon: const Icon(Icons.call_outlined),
-                    label: const Text('Chiama campo'),
-                  ),
-                ),
-                if (!booked) ...[
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _loading ? null : _confirm,
-                      icon: _loading
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.done_all),
-                      label: const Text('Conferma'),
-                    ),
-                  ),
-                ],
-              ],
+            // Wrap invece di Row: con il testo ingrandito due pulsanti
+            // affiancati non ci stavano e andavano in overflow.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final call = OutlinedButton.icon(
+                  onPressed: _call,
+                  icon: const Icon(Icons.call_outlined),
+                  label: const Text('Chiama campo'),
+                );
+                if (booked) {
+                  return SizedBox(width: double.infinity, child: call);
+                }
+                final confirm = FilledButton.icon(
+                  onPressed: _loading ? null : _confirm,
+                  icon: _loading
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.done_all),
+                  label: const Text('Conferma'),
+                );
+                // Sotto i 320 px i due pulsanti si impilano.
+                if (constraints.maxWidth < 320) {
+                  return Column(
+                    children: [
+                      SizedBox(width: double.infinity, child: call),
+                      const SizedBox(height: 9),
+                      SizedBox(width: double.infinity, child: confirm),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: call),
+                    const SizedBox(width: 9),
+                    Expanded(child: confirm),
+                  ],
+                );
+              },
             ),
           ],
         ],
       ),
     );
+  }
+
+  /// Testo di stato della prenotazione.
+  ///
+  /// A campo prenotato dice chi l'ha fatto e quando: prima si limitava a
+  /// "Prenotazione confermata a tutti i partecipanti", quindi nessuno sapeva a
+  /// chi chiedere conferma. I dati (`field_booked_by`, `field_booked_at`) erano
+  /// già caricati ma non venivano mostrati.
+  String _subtitle(bool booked) {
+    if (!booked) {
+      return widget.canBook
+          ? 'Chiama la struttura e poi conferma la prenotazione.'
+          : 'Disponibile dopo aver confermato la presenza.';
+    }
+    final when = DateFormat('d MMM · HH:mm', 'it_IT').format(_bookedAt!);
+    // Subito dopo la conferma il ricaricamento potrebbe non essere ancora
+    // arrivato: in quel caso chi ha prenotato è per forza l'utente corrente.
+    final bookerId = widget.match.fieldBookedBy ?? widget.match.currentUserId;
+    final booker = widget.match.participants
+        .where((player) => player.userId == bookerId)
+        .firstOrNull;
+    return booker == null
+        ? 'Confermato il $when. Tutti i partecipanti sono stati avvisati.'
+        : 'Confermato da ${booker.displayName} il $when.';
   }
 
   Future<void> _call() async {
@@ -940,23 +1011,38 @@ class _FieldBookingCardState extends State<_FieldBookingCard> {
     if (accepted != true || !mounted) return;
     setState(() => _loading = true);
     try {
-      await AppScope.of(context).repository
+      final bookedAt = await AppScope.of(context).repository
           .confirmFieldBooking(widget.match.summary.id);
-      await widget.onBooked();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Campo prenotato: partecipanti avvisati.'),
-          ),
-        );
-      }
+      if (!mounted) return;
+      // La card passa subito allo stato "prenotato" con il timestamp del
+      // server, senza dipendere dal ricaricamento della pagina.
+      setState(() {
+        _bookedAt = bookedAt ?? DateTime.now();
+        _loading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Campo prenotato: partecipanti avvisati.'),
+        ),
+      );
     } catch (error) {
+      debugPrint('Prenotazione campo non riuscita: $error');
       if (mounted) {
+        setState(() => _loading = false);
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(friendlyError(error))));
       }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    // Ricarica il resto della schermata (badge "Campo prenotato"
+    // nell'intestazione) fuori dal try: se il ricaricamento fallisce la
+    // prenotazione è comunque andata a buon fine, e mostrare un errore qui
+    // farebbe credere il contrario.
+    try {
+      await widget.onBooked();
+    } catch (error) {
+      debugPrint('Ricaricamento partita dopo la prenotazione fallito: $error');
     }
   }
 }
@@ -978,7 +1064,7 @@ class _Info extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              style: const TextStyle(color: AppTheme.muted, fontSize: 11),
             ),
             const SizedBox(height: 3),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -1036,690 +1122,6 @@ class _PlayersTab extends StatelessWidget {
       },
     );
   }
-}
-
-// Kept as a compact read-only fallback for narrow embedded contexts.
-// ignore: unused_element
-class _LineupTab extends StatelessWidget {
-  const _LineupTab({required this.match});
-  final MatchDetail match;
-  @override
-  Widget build(BuildContext context) {
-    if (match.lineupPlayers.isEmpty) {
-      return const PageFrame(
-        child: EmptyState(
-          icon: Icons.schema_outlined,
-          title: 'Formazione libera',
-          body: 'La formazione non è stata ancora configurata.',
-        ),
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [1, 2].map((teamNumber) {
-        final team = match.lineupTeams
-            .where((row) => asInt(row['team_number']) == teamNumber)
-            .firstOrNull;
-        final playerRows = match.lineupPlayers
-            .where((row) => asInt(row['team_number']) == teamNumber)
-            .toList();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Squadra $teamNumber',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const Spacer(),
-                      Chip(label: Text(team?['formation']?.toString() ?? '—')),
-                    ],
-                  ),
-                  const SizedBox(height: 13),
-                  ...playerRows.map((row) {
-                    final player = match.participants
-                        .where(
-                          (item) => item.userId == row['user_id'].toString(),
-                        )
-                        .firstOrNull;
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: PlayerAvatar(
-                        name: player?.displayName ?? 'Giocatore',
-                        url: player?.avatarUrl,
-                        radius: 18,
-                      ),
-                      title: Text(player?.displayName ?? 'Giocatore'),
-                      subtitle: Text(row['slot_key']?.toString() ?? ''),
-                      trailing:
-                          team?['captain_user_id']?.toString() == player?.userId
-                          ? const Icon(Icons.star, color: AppTheme.primary)
-                          : null,
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _InteractiveLineupTab extends StatefulWidget {
-  const _InteractiveLineupTab({required this.match});
-  final MatchDetail match;
-  @override
-  State<_InteractiveLineupTab> createState() => _InteractiveLineupTabState();
-}
-
-class _InteractiveLineupTabState extends State<_InteractiveLineupTab> {
-  late MatchDetail match = widget.match;
-  bool busy = false;
-
-  Future<void> _slot(int team, String slot) async {
-    setState(() => busy = true);
-    final repository = AppScope.of(context).repository;
-    try {
-      await repository.setLineupSlot(match.summary.id, team, slot);
-      final next = await repository.getMatch(match.summary.id);
-      if (next != null && mounted) setState(() => match = next);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  Future<void> _leave() async {
-    setState(() => busy = true);
-    final repository = AppScope.of(context).repository;
-    try {
-      await repository.leaveLineup(match.summary.id);
-      final next = await repository.getMatch(match.summary.id);
-      if (next != null && mounted) setState(() => match = next);
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  Future<void> _formation(int team, String formation) async {
-    setState(() => busy = true);
-    final repository = AppScope.of(context).repository;
-    try {
-      await repository.setLineupFormation(match.summary.id, team, formation);
-      final next = await repository.getMatch(match.summary.id);
-      if (next != null && mounted) setState(() => match = next);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      const Text(
-        'Scegli una posizione libera. Puoi cambiare squadra o lasciare la formazione.',
-        style: TextStyle(color: Colors.white54, height: 1.45),
-      ),
-      const SizedBox(height: 12),
-      if (busy) const LinearProgressIndicator(),
-      const SizedBox(height: 12),
-      ...[1, 2].map(_team),
-      if (match.lineupPlayers.any(
-        (row) => row['user_id']?.toString() == match.currentUserId,
-      ))
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: busy ? null : _leave,
-            icon: const Icon(Icons.logout),
-            label: const Text('Lascia formazione'),
-          ),
-        ),
-    ],
-  );
-
-  Widget _team(int teamNumber) {
-    final team = match.lineupTeams
-        .where((row) => asInt(row['team_number']) == teamNumber)
-        .firstOrNull;
-    final rows = match.lineupPlayers
-        .where((row) => asInt(row['team_number']) == teamNumber)
-        .toList();
-    final side = asInt(match.summary.footballFormat.split('v').first, 5);
-    final canChangeFormation =
-        match.canManage ||
-        team?['captain_user_id']?.toString() == match.currentUserId;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Squadra $teamNumber',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const Spacer(),
-                  if (canChangeFormation)
-                    PopupMenuButton<String>(
-                      onSelected: (value) => _formation(teamNumber, value),
-                      itemBuilder: (_) =>
-                          _formations(match.summary.footballFormat)
-                              .map(
-                                (value) => PopupMenuItem(
-                                  value: value,
-                                  child: Text(value),
-                                ),
-                              )
-                              .toList(),
-                      child: Chip(
-                        label: Text(team?['formation']?.toString() ?? '—'),
-                      ),
-                    )
-                  else
-                    Chip(label: Text(team?['formation']?.toString() ?? '—')),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildPitch(
-                teamNumber: teamNumber,
-                formation:
-                    team?['formation']?.toString() ??
-                    _formations(match.summary.footballFormat).first,
-                side: side,
-                rows: rows,
-                captainId: team?['captain_user_id']?.toString(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPitch({
-    required int teamNumber,
-    required String formation,
-    required int side,
-    required List<JsonMap> rows,
-    required String? captainId,
-  }) {
-    final positions = _pitchPositions(formation, side);
-    final widestLine = formation
-        .split('-')
-        .map((value) => int.tryParse(value) ?? 1)
-        .fold<int>(1, (largest, value) => value > largest ? value : largest);
-
-    return AspectRatio(
-      aspectRatio: .68,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tokenWidth = switch (widestLine) {
-            >= 5 => 58.0,
-            4 => 66.0,
-            3 => 78.0,
-            _ => 88.0,
-          };
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF216536), Color(0xFF174A2A)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: CustomPaint(painter: const _FootballPitchPainter()),
-                  ),
-                ),
-                Positioned(
-                  left: 13,
-                  top: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .34),
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Text(
-                      'TEAM $teamNumber · $formation',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                ),
-                ...positions.map((position) {
-                  final row = rows
-                      .where(
-                        (item) => item['slot_key']?.toString() == position.slot,
-                      )
-                      .firstOrNull;
-                  final player = row == null
-                      ? null
-                      : match.participants
-                            .where(
-                              (item) =>
-                                  item.userId == row['user_id']?.toString(),
-                            )
-                            .firstOrNull;
-                  final mine = player?.userId == match.currentUserId;
-                  return Positioned(
-                    left: constraints.maxWidth * position.x - tokenWidth / 2,
-                    top: constraints.maxHeight * position.y - 35,
-                    width: tokenWidth,
-                    height: 76,
-                    child: _PitchPlayer(
-                      role: position.role,
-                      player: player,
-                      mine: mine,
-                      captain: player != null && player.userId == captainId,
-                      enabled: !busy && player == null,
-                      onTap: () => _slot(teamNumber, position.slot),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  List<_PitchPosition> _pitchPositions(String formation, int side) {
-    final lines = formation
-        .split('-')
-        .map((value) => int.tryParse(value) ?? 0)
-        .where((value) => value > 0)
-        .toList();
-    if (lines.fold<int>(0, (sum, value) => sum + value) != side - 1) {
-      return [
-        const _PitchPosition(slot: 'gk', role: 'Portiere', x: .5, y: .88),
-        ...List.generate(
-          side - 1,
-          (index) => _PitchPosition(
-            slot: 'p${index + 1}',
-            role: 'Giocatore',
-            x: (index % 3 + 1) / 4,
-            y: .68 - (index ~/ 3) * .22,
-          ),
-        ),
-      ];
-    }
-
-    final positions = <_PitchPosition>[
-      const _PitchPosition(slot: 'gk', role: 'Portiere', x: .5, y: .89),
-    ];
-    var slotNumber = 1;
-    final lineY = lines.length == 3
-        ? const [.70, .48, .25]
-        : lines.length == 1
-        ? const [.48]
-        : List.generate(
-            lines.length,
-            (index) => .72 - index * (.48 / (lines.length - 1)),
-          );
-    for (var lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      final count = lines[lineIndex];
-      final roles = _rolesForLine(lineIndex, lines.length, count);
-      for (var index = 0; index < count; index++) {
-        positions.add(
-          _PitchPosition(
-            slot: 'p$slotNumber',
-            role: roles[index],
-            x: (index + 1) / (count + 1),
-            y: lineY[lineIndex],
-          ),
-        );
-        slotNumber += 1;
-      }
-    }
-    return positions;
-  }
-
-  List<String> _rolesForLine(int line, int totalLines, int count) {
-    if (line == 0) {
-      return switch (count) {
-        1 => const ['Difensore'],
-        2 => const ['Terzino SX', 'Terzino DX'],
-        3 => const ['Terzino SX', 'Difensore', 'Terzino DX'],
-        4 => const [
-          'Terzino SX',
-          'Dif. centrale',
-          'Dif. centrale',
-          'Terzino DX',
-        ],
-        _ => List.generate(count, (index) => 'Difensore ${index + 1}'),
-      };
-    }
-    if (line == totalLines - 1) {
-      return switch (count) {
-        1 => const ['Punta'],
-        2 => const ['Attaccante SX', 'Attaccante DX'],
-        3 => const ['Ala SX', 'Punta', 'Ala DX'],
-        _ => List.generate(count, (index) => 'Attaccante ${index + 1}'),
-      };
-    }
-    return switch (count) {
-      1 => const ['Mediano'],
-      2 => const ['Centrocampista SX', 'Centrocampista DX'],
-      3 => const ['Esterno SX', 'Mediano', 'Esterno DX'],
-      4 => const [
-        'Esterno SX',
-        'Centrocampista',
-        'Centrocampista',
-        'Esterno DX',
-      ],
-      5 => const [
-        'Esterno SX',
-        'Mezzala SX',
-        'Mediano',
-        'Mezzala DX',
-        'Esterno DX',
-      ],
-      _ => List.generate(count, (index) => 'Centrocampista ${index + 1}'),
-    };
-  }
-
-  List<String> _formations(String format) => switch (format) {
-    '5v5' => const ['1-2-1', '2-1-1', '1-1-2'],
-    '7v7' => const ['2-3-1', '3-2-1', '2-2-2'],
-    '8v8' => const ['3-3-1', '2-3-2', '3-2-2'],
-    '10v10' => const ['3-4-2', '4-3-2', '4-4-1'],
-    _ => const ['4-3-3', '4-4-2', '3-5-2'],
-  };
-}
-
-class _PitchPosition {
-  const _PitchPosition({
-    required this.slot,
-    required this.role,
-    required this.x,
-    required this.y,
-  });
-
-  final String slot;
-  final String role;
-  final double x;
-  final double y;
-}
-
-class _PitchPlayer extends StatelessWidget {
-  const _PitchPlayer({
-    required this.role,
-    required this.player,
-    required this.mine,
-    required this.captain,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final String role;
-  final MatchParticipant? player;
-  final bool mine;
-  final bool captain;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = mine ? AppTheme.background : Colors.white;
-    return Semantics(
-      button: player == null,
-      label: player == null
-          ? 'Scegli posizione $role'
-          : '${player!.displayName}, $role',
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(14),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 43,
-                  height: 43,
-                  decoration: BoxDecoration(
-                    color: mine
-                        ? AppTheme.primary
-                        : player == null
-                        ? const Color(0xFF173D23).withValues(alpha: .88)
-                        : const Color(0xFF101411),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: mine
-                          ? AppTheme.primary
-                          : player == null
-                          ? Colors.white70
-                          : Colors.white,
-                      width: mine ? 3 : 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: .35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: player == null
-                      ? const Icon(Icons.add, color: Colors.white, size: 22)
-                      : player!.avatarUrl?.isNotEmpty == true
-                      ? ClipOval(
-                          child: CachedNetworkImage(
-                            imageUrl: player!.avatarUrl!,
-                            fit: BoxFit.cover,
-                            errorWidget: (_, _, _) => Icon(
-                              Icons.sports_soccer,
-                              color: foreground,
-                              size: 20,
-                            ),
-                          ),
-                        )
-                      : Icon(Icons.sports_soccer, color: foreground, size: 20),
-                ),
-                if (captain)
-                  const Positioned(
-                    right: -5,
-                    top: -5,
-                    child: CircleAvatar(
-                      radius: 9,
-                      backgroundColor: Color(0xFFFFD84D),
-                      foregroundColor: Colors.black,
-                      child: Text(
-                        'C',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Container(
-              constraints: const BoxConstraints(minWidth: 48),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: mine
-                    ? AppTheme.primary
-                    : Colors.black.withValues(alpha: .72),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                player?.displayName ?? 'Scegli',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              role.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppTheme.primary,
-                fontSize: 7,
-                height: 1,
-                fontWeight: FontWeight.w900,
-                shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FootballPitchPainter extends CustomPainter {
-  const _FootballPitchPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stripe = Paint()..color = Colors.white.withValues(alpha: .035);
-    for (var index = 0; index < 8; index += 2) {
-      canvas.drawRect(
-        Rect.fromLTWH(0, size.height * index / 8, size.width, size.height / 8),
-        stripe,
-      );
-    }
-
-    final line = Paint()
-      ..color = Colors.white.withValues(alpha: .52)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final inset = size.width * .045;
-    final field = Rect.fromLTWH(
-      inset,
-      inset,
-      size.width - inset * 2,
-      size.height - inset * 2,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(field, const Radius.circular(4)),
-      line,
-    );
-    canvas.drawLine(
-      Offset(inset, size.height / 2),
-      Offset(size.width - inset, size.height / 2),
-      line,
-    );
-    canvas.drawCircle(
-      Offset(size.width / 2, size.height / 2),
-      size.width * .13,
-      line,
-    );
-    canvas.drawCircle(
-      Offset(size.width / 2, size.height / 2),
-      2,
-      Paint()..color = Colors.white.withValues(alpha: .65),
-    );
-
-    final penaltyWidth = size.width * .55;
-    final penaltyHeight = size.height * .13;
-    final smallWidth = size.width * .28;
-    final smallHeight = size.height * .055;
-    canvas.drawRect(
-      Rect.fromLTWH(
-        (size.width - penaltyWidth) / 2,
-        inset,
-        penaltyWidth,
-        penaltyHeight,
-      ),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        (size.width - penaltyWidth) / 2,
-        size.height - inset - penaltyHeight,
-        penaltyWidth,
-        penaltyHeight,
-      ),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        (size.width - smallWidth) / 2,
-        inset,
-        smallWidth,
-        smallHeight,
-      ),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        (size.width - smallWidth) / 2,
-        size.height - inset - smallHeight,
-        smallWidth,
-        smallHeight,
-      ),
-      line,
-    );
-
-    final goalWidth = size.width * .18;
-    canvas.drawRect(
-      Rect.fromLTWH((size.width - goalWidth) / 2, 1, goalWidth, inset - 1),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        (size.width - goalWidth) / 2,
-        size.height - inset,
-        goalWidth,
-        inset - 1,
-      ),
-      line,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _FootballPitchPainter oldDelegate) => false;
 }
 
 String _statusLabel(String status) => switch (status) {

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../theme/app_theme.dart';
+
 class ItalianPlace {
   const ItalianPlace({
     required this.city,
@@ -288,30 +290,44 @@ class _ItalianMunicipalityFieldState extends State<ItalianMunicipalityField> {
           Container(
             margin: const EdgeInsets.only(top: 7),
             constraints: const BoxConstraints(maxHeight: 230),
-            decoration: BoxDecoration(
-              color: const Color(0xFF171B18),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: _results.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final place = _results[index];
-                return ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.place_outlined),
-                  title: Text(place.city),
-                  subtitle: Text('${place.province} · Italia'),
-                  onTap: () {
-                    _controller.text = place.city;
-                    _selected = place;
-                    widget.onSelected(place);
-                    setState(() => _results = const []);
-                  },
-                );
-              },
+            // Material e non solo DecoratedBox: le ListTile dipingono sfondo e
+            // onda del tocco sul Material antenato più vicino, quindi con un
+            // semplice contenitore colorato il tocco risultava invisibile
+            // (Flutter lo segnalava con un'assertion a runtime).
+            child: Material(
+              color: AppTheme.surface,
+              clipBehavior: Clip.antiAlias,
+              // Solo `shape`: Material va in assertion se riceve anche
+              // `borderRadius`, perché sarebbero due definizioni della stessa
+              // cosa.
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppTheme.outline),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _results.length,
+                separatorBuilder: (_, _) =>
+                    const Divider(height: 1, color: AppTheme.outline),
+                itemBuilder: (context, index) {
+                  final place = _results[index];
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(
+                      Icons.place_outlined,
+                      color: AppTheme.primary,
+                    ),
+                    title: Text(place.city),
+                    subtitle: Text('${place.province} · Italia'),
+                    onTap: () {
+                      _controller.text = place.city;
+                      _selected = place;
+                      widget.onSelected(place);
+                      setState(() => _results = const []);
+                    },
+                  );
+                },
+              ),
             ),
           ),
         const SizedBox(height: 10),
@@ -327,7 +343,7 @@ class _ItalianMunicipalityFieldState extends State<ItalianMunicipalityField> {
         const SizedBox(height: 6),
         const Text(
           'Località italiane verificate tramite OpenStreetMap.',
-          style: TextStyle(color: Colors.white38, fontSize: 10),
+          style: TextStyle(color: AppTheme.mutedSoft, fontSize: 10),
         ),
       ],
     );

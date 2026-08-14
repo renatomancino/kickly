@@ -28,7 +28,7 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const ListSkeleton(items: 2);
         }
         final data = snapshot.data;
         if (data == null) {
@@ -72,7 +72,7 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
                     ),
                     Text(
                       '@${profile.username}',
-                      style: const TextStyle(color: Colors.white54),
+                      style: const TextStyle(color: AppTheme.muted),
                     ),
                     const SizedBox(height: 12),
                     Wrap(
@@ -142,7 +142,7 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
                     const Text(
                       'FORMA RECENTE',
                       style: TextStyle(
-                        color: Colors.white38,
+                        color: AppTheme.mutedSoft,
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
@@ -189,7 +189,7 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
         '$value',
         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
       ),
-      Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+      Text(label, style: const TextStyle(color: AppTheme.muted, fontSize: 10)),
     ],
   );
   String _role(String? value) =>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -85,7 +86,7 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
               const SizedBox(height: 7),
               const Text(
                 'Inseriscilo qui per vedere la lega prima di entrare.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: AppTheme.muted),
               ),
               const SizedBox(height: 25),
               TextField(
@@ -128,7 +129,7 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
                         const SizedBox(height: 8),
                         Text(
                           '${_preview!['city']}, ${_preview!['country']}',
-                          style: const TextStyle(color: Colors.white54),
+                          style: const TextStyle(color: AppTheme.muted),
                         ),
                         const SizedBox(height: 14),
                         Wrap(

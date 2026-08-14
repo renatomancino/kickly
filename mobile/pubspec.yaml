@@ -38,6 +38,23 @@ dependencies:
   intl: 0.20.3
   supabase_flutter: 2.17.1
   url_launcher: 6.3.2
+  # Banner di sistema veri (non SnackBar) e canale notifiche Android brandizzato.
+  flutter_local_notifications: 19.4.2
+  # Task periodico che controlla le notifiche non lette ad app chiusa, così il
+  # telefono avvisa anche senza un canale push FCM/APNs configurato.
+  workmanager: 0.9.0+3
+  # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
+  # che gira in un isolate separato senza accesso allo stato dell'app.
+  shared_preferences: 2.5.5
+  # Keychain (iOS) / Keystore (Android) per i token di sessione Supabase: senza
+  # questo finiscono in SharedPreferences/NSUserDefaults in chiaro.
+  flutter_secure_storage: 11.0.0
+  # Sign in with Google, flusso nativo con ID token verificato da Supabase.
+  google_sign_in: 7.2.0
+  # Sign in with Apple, obbligatorio su iOS se si offre un altro login social.
+  sign_in_with_apple: 8.1.0
+  # Hash del nonce nel flusso Apple (vedi kickly_repository.dart).
+  crypto: 3.0.7
 
 dev_dependencies:
   flutter_test:
@@ -64,6 +81,29 @@ flutter:
 
   assets:
     - assets/images/
+
+  # Geist, lo stesso font della PWA (next/font/google in src/app/layout.tsx).
+  # Non è nel catalogo Google Fonts, quindi i file vanno impacchettati qui:
+  # sono i TTF statici del release ufficiale vercel/geist-font, licenza
+  # SIL OFL 1.1 (assets/fonts/LICENSE.txt).
+  # Pesi statici e non variabile: in Flutter il mapping di fontWeight su un
+  # font variabile dipende dalla piattaforma, con i pesi dichiarati uno a uno
+  # il risultato è identico ovunque.
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Geist-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Geist-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Geist-Black.ttf
+          weight: 900
 
 flutter_launcher_icons:
   android: true

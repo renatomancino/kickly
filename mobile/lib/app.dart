@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/config/app_config.dart';
+import 'core/notifications/notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/kickly_repository.dart';
 import 'features/auth/auth_page.dart';
@@ -38,6 +39,27 @@ class KicklyApp extends StatefulWidget {
 }
 
 class _KicklyAppState extends State<KicklyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Il tap su una notifica di sistema porta al link della notifica (es.
+    // /matches/<id>). Il router esiste solo da qui in poi, quindi il servizio
+    // tiene da parte il link di lancio e ce lo consegna adesso.
+    NotificationService.instance.bindNavigation(_openNotificationLink);
+  }
+
+  /// Apre il link di una notifica, ma solo a sessione pronta: se l'utente non
+  /// ha ancora fatto login il redirect del router lo rimanderebbe comunque
+  /// alla schermata di accesso.
+  void _openNotificationLink(String link) {
+    if (!link.startsWith('/')) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!widget.appState.isSignedIn) return;
+      _router.push(link);
+    });
+  }
+
   late final GoRouter _router = GoRouter(
     initialLocation: '/splash',
     refreshListenable: widget.appState,
@@ -159,6 +181,25 @@ class _KicklyAppState extends State<KicklyApp> {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark,
         routerConfig: _router,
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            // Il font di sistema può essere ingrandito fino al 200%: oltre
+            // 1.3x le card con altezze fisse (tessere statistiche, token del
+            // campo, barra di navigazione) vanno in overflow. Limitiamo la
+            // scala invece di lasciare che la UI si rompa, mantenendo comunque
+            // un ingrandimento utile per chi ne ha bisogno.
+            data: media.copyWith(
+              textScaler: media.textScaler.clamp(
+                minScaleFactor: .85,
+                maxScaleFactor: 1.3,
+              ),
+            ),
+            // L'alone verde sta dietro a ogni schermata, comprese quelle
+            // spinte sopra la shell.
+            child: KicklyBackdrop(child: child ?? const SizedBox.shrink()),
+          );
+        },
       ),
     );
   }

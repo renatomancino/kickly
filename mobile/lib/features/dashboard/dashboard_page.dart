@@ -25,7 +25,16 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _refresh() async {
     final next = AppScope.of(context).repository.getDashboard();
-    setState(() => _future = next);
+    // Blocco, non arrow-expression: `() => _future = next` come closure
+    // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
+    // Future stessa. setState() se ne accorge in debug e lancia *dopo* aver
+    // già assegnato il campo ma *prima* di schedulare il rebuild, quindi il
+    // resto della funzione (l'`await next` sotto) non gira più: la pagina
+    // restava agganciata alla vecchia Future finché qualcos'altro non la
+    // ricostruiva per altri motivi.
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -35,7 +44,9 @@ class _DashboardPageState extends State<DashboardPage> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          // Skeleton al posto della rotellina: mostra già la forma della
+          // pagina, come fa `loading.tsx` nella PWA.
+          return const ListSkeleton(items: 2);
         }
         if (snapshot.hasError || snapshot.data == null) {
           return PageFrame(
@@ -67,7 +78,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       children: [
                         const Text(
                           'Bentornato,',
-                          style: TextStyle(color: Colors.white54, fontSize: 11),
+                          style: TextStyle(color: AppTheme.muted, fontSize: 11),
                         ),
                         Text(
                           data.profile.firstName ?? data.profile.username,
@@ -110,14 +121,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 title: 'Numeri in campo',
               ),
               const SizedBox(height: 12),
-              GridView.count(
-                shrinkWrap: true,
-                crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 5 : 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 1.35,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
+              StatGrid(
+                tiles: [
                   StatTile(
                     label: 'Partite',
                     value: data.stats.matches,
@@ -138,38 +143,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     value: data.stats.mvp,
                     icon: Icons.emoji_events_outlined,
                   ),
-                  Card(
-                    color: AppTheme.primary,
-                    child: Padding(
-                      padding: const EdgeInsets.all(15),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.auto_awesome,
-                            color: AppTheme.background,
-                            size: 18,
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${data.stats.overall}',
-                            style: const TextStyle(
-                              color: AppTheme.background,
-                              fontSize: 25,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const Text(
-                            'Overall',
-                            style: TextStyle(
-                              color: AppTheme.background,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  StatTile(
+                    label: 'Overall',
+                    value: data.stats.overall,
+                    icon: Icons.auto_awesome,
+                    highlight: true,
                   ),
                 ],
               ),
@@ -207,7 +185,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         subtitle: Text(
-                          '${league.city} · ${league.memberCount} membri · ${league.footballFormat}',
+                          '${league.city} · ${league.memberCountLabel} · ${league.footballFormat}',
                         ),
                         trailing: const Icon(Icons.chevron_right),
                       ),
@@ -280,7 +258,7 @@ class _LastMatchCard extends StatelessWidget {
                   ),
                   Text(
                     match.leagueName,
-                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    style: const TextStyle(color: AppTheme.muted, fontSize: 11),
                   ),
                 ],
               ),
@@ -360,7 +338,7 @@ class _HeroMatch extends StatelessWidget {
                         Text(
                           match.leagueName,
                           style: const TextStyle(
-                            color: Colors.white54,
+                            color: AppTheme.muted,
                             fontSize: 12,
                           ),
                         ),
@@ -438,7 +416,7 @@ class _HeroMatch extends StatelessWidget {
                         Text(
                           '${match.maxPlayers - match.goingCount} posti',
                           style: const TextStyle(
-                            color: Colors.white54,
+                            color: AppTheme.muted,
                             fontSize: 11,
                           ),
                         ),

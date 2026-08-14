@@ -115,7 +115,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const ListSkeleton(items: 2);
         }
         final match = snapshot.data;
         if (match == null) {
@@ -153,7 +153,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
             const SizedBox(height: 6),
             const Text(
               'Assegna squadre, punteggio, goal e assist.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppTheme.muted),
             ),
             const SizedBox(height: 22),
             Row(
@@ -315,7 +315,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
 
   Widget _score(String label, int value, ValueChanged<int> change) => Column(
     children: [
-      Text(label, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+      Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.muted)),
       Row(
         children: [
           IconButton(
@@ -337,7 +337,7 @@ class _MatchResultPageState extends State<MatchResultPage> {
 
   Widget _counter(String label, int value, ValueChanged<int> change) => Column(
     children: [
-      Text(label, style: const TextStyle(fontSize: 9, color: Colors.white54)),
+      Text(label, style: const TextStyle(fontSize: 9, color: AppTheme.muted)),
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [

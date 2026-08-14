@@ -67,7 +67,16 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
 
   Future<void> _refresh() async {
     final next = _load();
-    setState(() => _future = next);
+    // Blocco, non arrow-expression: `() => _future = next` come closure
+    // farebbe ritornare a setState() il valore dell'assegnamento, cioè la
+    // Future stessa. setState() se ne accorge in debug e lancia *dopo* aver
+    // già assegnato il campo ma *prima* di schedulare il rebuild, quindi il
+    // resto della funzione (l'`await next` sotto) non gira più: la pagina
+    // restava agganciata alla vecchia Future finché qualcos'altro non la
+    // ricostruiva per altri motivi.
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -88,7 +97,7 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const ListSkeleton(items: 2);
                 }
                 if (snapshot.hasError) {
                   return PageFrame(
@@ -389,7 +398,7 @@ class _LeagueHome extends StatelessWidget {
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Colors.white70,
+                            color: AppTheme.foreground,
                             height: 1.35,
                           ),
                         ),
@@ -417,7 +426,7 @@ class _LeagueHome extends StatelessWidget {
                 Text(
                   detail.summary.description ??
                       'Una lega Kickly pronta per nuove partite e rivalità.',
-                  style: const TextStyle(color: Colors.white60),
+                  style: const TextStyle(color: AppTheme.muted),
                 ),
                 const SizedBox(height: 20),
                 Row(
@@ -487,7 +496,7 @@ class _Metric extends StatelessWidget {
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 10),
+          style: const TextStyle(color: AppTheme.muted, fontSize: 10),
         ),
       ],
     ),
@@ -694,7 +703,7 @@ class _Communications extends StatelessWidget {
                               Text(
                                 '@${item.authorUsername}',
                                 style: const TextStyle(
-                                  color: Colors.white54,
+                                  color: AppTheme.muted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -727,7 +736,7 @@ class _Communications extends StatelessWidget {
                     Text(
                       item.body,
                       style: const TextStyle(
-                        color: Colors.white70,
+                        color: AppTheme.foreground,
                         height: 1.45,
                       ),
                     ),
@@ -735,7 +744,7 @@ class _Communications extends StatelessWidget {
                     Text(
                       '${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}',
                       style: const TextStyle(
-                        color: Colors.white38,
+                        color: AppTheme.mutedSoft,
                         fontSize: 10,
                       ),
                     ),
@@ -749,54 +758,17 @@ class _Communications extends StatelessWidget {
   );
 
   Future<void> _compose(BuildContext context) async {
-    final title = TextEditingController(), body = TextEditingController();
-    bool pinned = false;
-    final submit = await showDialog<bool>(
+    final draft = await showDialog<_CommunicationDraft>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          title: const Text('Nuova comunicazione'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: title,
-                decoration: const InputDecoration(labelText: 'Titolo'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: body,
-                maxLines: 4,
-                decoration: const InputDecoration(labelText: 'Messaggio'),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: pinned,
-                onChanged: (v) => setModalState(() => pinned = v),
-                title: const Text('Fissa in alto'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Pubblica'),
-            ),
-          ],
-        ),
-      ),
+      builder: (dialogContext) => const _ComposeCommunicationDialog(),
     );
-    if (submit == true && context.mounted) {
+    if (draft != null && context.mounted) {
       try {
         await AppScope.of(context).repository.publishLeagueCommunication(
           detail.summary.id,
-          title: title.text,
-          body: body.text,
-          pinned: pinned,
+          title: draft.title,
+          body: draft.body,
+          pinned: draft.pinned,
         );
         await onRefresh();
       } catch (e) {
@@ -806,9 +778,79 @@ class _Communications extends StatelessWidget {
         }
       }
     }
-    title.dispose();
-    body.dispose();
   }
+}
+
+class _CommunicationDraft {
+  const _CommunicationDraft(this.title, this.body, this.pinned);
+  final String title;
+  final String body;
+  final bool pinned;
+}
+
+// Widget (non funzione locale) cosi i TextEditingController sono creati in
+// initState e distrutti in dispose(): il ciclo di vita segue quello reale
+// dell'Element del dialog invece di essere chiuso subito dopo l'await di
+// showDialog, quando l'animazione di uscita puo' ancora usarli e crashare
+// con "TextEditingController was used after being disposed".
+class _ComposeCommunicationDialog extends StatefulWidget {
+  const _ComposeCommunicationDialog();
+  @override
+  State<_ComposeCommunicationDialog> createState() =>
+      _ComposeCommunicationDialogState();
+}
+
+class _ComposeCommunicationDialogState
+    extends State<_ComposeCommunicationDialog> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  bool _pinned = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Nuova comunicazione'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _title,
+          decoration: const InputDecoration(labelText: 'Titolo'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _body,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'Messaggio'),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _pinned,
+          onChanged: (v) => setState(() => _pinned = v),
+          title: const Text('Fissa in alto'),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Annulla'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(
+          context,
+          _CommunicationDraft(_title.text, _body.text, _pinned),
+        ),
+        child: const Text('Pubblica'),
+      ),
+    ],
+  );
 }
 
 class _Leaderboard extends StatefulWidget {
@@ -1063,7 +1105,7 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: const TextStyle(color: Colors.white54)),
+      Text(label, style: const TextStyle(color: AppTheme.muted)),
       const Spacer(),
       Flexible(
         child: Text(

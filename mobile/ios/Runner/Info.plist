@@ -26,9 +26,39 @@
 				<string>io.kickly.app</string>
 			</array>
 		</dict>
+		<!-- Sign in with Google su iOS: anche passando clientId/serverClientId
+		     da codice (vedi lib/main.dart), il SDK nativo si aspetta comunque
+		     questo schema per ricevere il redirect a fine autenticazione. Va
+		     sostituito con il REVERSED_CLIENT_ID del Client ID iOS creato in
+		     Google Cloud Console (letto dalla dashboard, non da un
+		     GoogleService-Info.plist che qui non serve). Finché resta il
+		     placeholder, il pulsante Google resta cliccabile ma
+		     l'autenticazione non completa mai il redirect. Vedi README. -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.REPLACE_WITH_IOS_CLIENT_ID</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Kickly usa la libreria foto per aggiornare il tuo avatar.</string>
+	<!-- Background refresh: permette il controllo periodico delle notifiche
+	     quando l'app non e' in primo piano. Senza queste due chiavi iOS non
+	     risveglia mai il task e le notifiche arrivano solo ad app aperta. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<!-- Deve corrispondere all'uniqueName passato a registerPeriodicTask in
+	     lib/core/notifications/background_sync.dart. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>kickly-notification-poll-unique</string>
+	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

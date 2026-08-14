@@ -184,7 +184,25 @@ class LeagueSummary {
 
   bool get canManage =>
       currentUserRole == 'owner' || currentUserRole == 'admin';
+
+  /// Conteggio membri già declinato: "1 membro" invece di "1 membri".
+  String get memberCountLabel =>
+      '$memberCount ${memberCount == 1 ? 'membro' : 'membri'}';
+
+  /// Ruolo in italiano, con l'iniziale maiuscola.
+  ///
+  /// Prima veniva mostrato il valore grezzo del database ('owner', 'admin'),
+  /// che stonava in mezzo a un'interfaccia tutta in italiano.
+  String get roleLabel => leagueRoleLabel(currentUserRole);
 }
+
+/// Traduzione dei ruoli di lega, condivisa fra le schermate.
+String leagueRoleLabel(String role) => switch (role) {
+  'owner' => 'Proprietario',
+  'admin' => 'Admin',
+  'member' => 'Membro',
+  _ => role,
+};
 
 class LeagueMember {
   const LeagueMember({
@@ -430,6 +448,44 @@ class MatchDetail {
 
   bool get canManage =>
       currentUserRole == 'owner' || currentUserRole == 'admin';
+}
+
+/// Stato completo della formazione di una partita: le due squadre con modulo e
+/// capitano, e l'elenco di chi occupa quale slot.
+///
+/// È esattamente il jsonb che le RPC `set_match_lineup_slot`,
+/// `leave_match_lineup` e `set_match_lineup_formation` restituiscono già oggi
+/// (via `private.match_lineup_snapshot`). Prima veniva scartato e la pagina
+/// rifaceva una `getMatch()` da sei query per ricostruire lo stesso dato: usare
+/// lo snapshot rende la scelta della posizione immediata invece di far
+/// aspettare un round-trip completo.
+class LineupSnapshot {
+  const LineupSnapshot({required this.teams, required this.players});
+
+  /// Righe di `match_lineup_teams`: team_number, formation, captain_user_id.
+  final List<JsonMap> teams;
+
+  /// Righe di `match_lineup_players`: user_id, team_number, slot_key.
+  final List<JsonMap> players;
+
+  /// Legge lo snapshot restituito da una RPC; tollera un payload vuoto o
+  /// inatteso restituendo liste vuote invece di lanciare.
+  static LineupSnapshot? fromRpc(Object? data) {
+    if (data is! Map) return null;
+    return LineupSnapshot(
+      teams: rowsOf(data['teams']),
+      players: rowsOf(data['players']),
+    );
+  }
+
+  /// Normalizza una lista di righe che arriva da PostgREST o da un jsonb in
+  /// `List<JsonMap>`, scartando qualsiasi elemento non conforme.
+  static List<JsonMap> rowsOf(Object? value) => value is List
+      ? value
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList()
+      : const [];
 }
 
 class MatchPostGame {
