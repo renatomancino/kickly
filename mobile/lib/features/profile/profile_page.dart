@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,6 +6,7 @@ import '../../app.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
+import 'profile_widgets.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -16,10 +18,32 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   Future<ProfileDetails>? _future;
 
+  // 0 = Panoramica (statistiche del momento), 1 = Andamento (come sono
+  // arrivate quelle statistiche nel tempo). Un CupertinoSlidingSegmentedControl
+  // al posto di impilare tutto in un'unica scrollata lunghissima: separa lo
+  // "scatto" dal "percorso", come fanno le app Apple (Fitness, Salute) quando
+  // un profilo ha sia un riepilogo sia uno storico.
+  int _tab = 0;
+
+  // Distanza di scroll su cui far comparire il titolo minimo della barra:
+  // FlexibleSpaceBar.title di suo lo mostra gia (quasi) a piena opacita
+  // anche a testata completamente espansa, quindi il nome duplicava quello
+  // grande sotto invece di comparire solo dopo lo scroll. Calcolando
+  // l'opacita a mano dallo scroll offset, invece, la comparsa e sotto il
+  // nostro controllo esplicito.
+  static const _titleFadeDistance = 120.0;
+  final _scrollController = ScrollController();
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _future ??= AppScope.of(context).repository.getProfileDetails();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _reload() async {
@@ -75,83 +99,465 @@ class _ProfilePageState extends State<ProfilePage> {
           final data = snapshot.data!;
           final profile = data.profile;
           final stats = data.stats;
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
-            children: [
-              // Intestazione a due blocchi: identita a sinistra, overall come
-              // tessera a se sulla destra, cosi il numero che riassume il
-              // giocatore si legge senza cercarlo dentro all'avatar.
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // L'overall passa anche alla card identita: le due tessere
-                    // devono cambiare "livello" insieme, altrimenti l'accento
-                    // dorato sbucherebbe solo su una delle due meta della
-                    // testata e sembrerebbe un errore piuttosto che una scelta.
-                    Expanded(
-                      child: _IdentityCard(
-                        profile: profile,
-                        overall: stats.overall,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    _OverallCard(overall: stats.overall),
-                  ],
+          final elite = stats.overall >= eliteOverallThreshold;
+          return CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              // Testata a scomparsa: da sopra piena (avatar, nome, ruoli,
+              // anello dell'overall) a una barra minima con solo il nome
+              // quando si scrolla, come le pagine profilo/impostazioni di
+              // iOS. Prima l'intestazione era una coppia di Card fisse in
+              // cima alla lista: qui e contenuto libero sopra allo sfondo
+              // (l'alone verde di KicklyBackdrop resta visibile dietro),
+              // non piu incorniciato.
+              SliverAppBar(
+                pinned: true,
+                automaticallyImplyLeading: false,
+                backgroundColor: AppTheme.background,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                // Il titolo vive qui (non in FlexibleSpaceBar.title): quello
+                // resterebbe visibile anche a testata espansa, sovrapposto
+                // al nome grande sotto. Qui la sua opacita segue lo scroll
+                // offset in modo esplicito, vedi AnimatedBuilder sotto.
+                title: AnimatedBuilder(
+                  animation: _scrollController,
+                  builder: (context, child) {
+                    final offset = _scrollController.hasClients
+                        ? _scrollController.offset
+                        : 0.0;
+                    final opacity = (offset / _titleFadeDistance).clamp(
+                      0.0,
+                      1.0,
+                    );
+                    return Opacity(opacity: opacity, child: child);
+                  },
+                  child: _CollapsedTitle(profile: profile),
+                ),
+                // 252 sembrava sufficiente misurando solo una riga di badge,
+                // ma con tre pill (ruolo, piede, livello) il Wrap va quasi
+                // sempre a due righe: senza margine la colonna sforava lo
+                // spazio della testata ("BOTTOM OVERFLOWED"). 288 lascia
+                // anche un margine per il testo di sistema ingrandito.
+                expandedHeight: 288,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _HeroHeader(
+                    profile: profile,
+                    stats: stats,
+                    elite: elite,
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
-              // Striscia dei numeri: una riga sola con separatori verticali al
-              // posto della griglia di tessere. Occupa meno spazio e si legge
-              // come un cruscotto invece che come quattro riquadri slegati.
-              _StatStrip(stats: stats),
-              const SizedBox(height: 12),
-              _FormCard(stats: stats, form: data.form),
-              const SizedBox(height: 22),
-              const _SectionLabel('Account'),
-              const SizedBox(height: 10),
-              Card(
-                child: Column(
-                  children: [
-                    _SettingRow(
-                      icon: Icons.edit_outlined,
-                      title: 'Modifica profilo',
-                      subtitle: 'Nome, ruolo, foto e localita',
-                      onTap: () async {
-                        await context.push('/profile/edit');
-                        if (context.mounted) await _reload();
-                      },
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    Center(
+                      child: CupertinoSlidingSegmentedControl<int>(
+                        groupValue: _tab,
+                        backgroundColor: AppTheme.surfaceHigh,
+                        thumbColor: AppTheme.surface,
+                        onValueChanged: (value) {
+                          if (value != null) setState(() => _tab = value);
+                        },
+                        children: const {
+                          0: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 7,
+                            ),
+                            child: Text(
+                              'Panoramica',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          1: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 7,
+                            ),
+                            child: Text(
+                              'Andamento',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        },
+                      ),
                     ),
-                    const Divider(height: 1),
-                    _SettingRow(
-                      icon: Icons.notifications_outlined,
-                      title: 'Preferenze notifiche',
-                      subtitle: 'Scegli cosa farti ricordare',
-                      onTap: _showPreferences,
+                    const SizedBox(height: 20),
+                    // AnimatedSwitcher invece di uno swap secco: il cambio tab
+                    // e uno dei punti in cui una micro-transizione si nota di
+                    // piu, essendo innescata direttamente dal tocco dell'utente.
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: _tab == 0
+                          ? _OverviewSection(
+                              key: const ValueKey('overview'),
+                              stats: stats,
+                            )
+                          : _TrendSection(
+                              key: const ValueKey('trend'),
+                              history: data.history,
+                              form: data.form,
+                            ),
                     ),
-                    const Divider(height: 1),
-                    _SettingRow(
-                      icon: Icons.logout,
-                      title: 'Esci',
-                      danger: true,
-                      // Solo signOut(): AppState.signOut() già chiama
-                      // notifyListeners(), e il redirect del router (che
-                      // ascolta AppState tramite refreshListenable) manda
-                      // già da solo a /login quando isSignedIn diventa
-                      // false. Un context.go('/login') qui in più correva in
-                      // parallelo con quel redirect automatico ed era la
-                      // causa di un crash intermittente ("Duplicate
-                      // GlobalKey detected in widget tree", visto in log
-                      // reali) per doppia navigazione nello stesso frame.
-                      onTap: () => AppScope.of(context).appState.signOut(),
+                    const SizedBox(height: 28),
+                    const _SectionLabel('Account'),
+                    const SizedBox(height: 10),
+                    _AccountCard(
+                      children: [
+                        _SettingRow(
+                          icon: Icons.edit_outlined,
+                          title: 'Modifica profilo',
+                          subtitle: 'Nome, ruolo, foto e localita',
+                          onTap: () async {
+                            await context.push('/profile/edit');
+                            if (context.mounted) await _reload();
+                          },
+                        ),
+                        _SettingRow(
+                          icon: Icons.notifications_outlined,
+                          title: 'Preferenze notifiche',
+                          subtitle: 'Scegli cosa farti ricordare',
+                          onTap: _showPreferences,
+                        ),
+                        _SettingRow(
+                          icon: Icons.logout,
+                          title: 'Esci',
+                          danger: true,
+                          // Solo signOut(): AppState.signOut() già chiama
+                          // notifyListeners(), e il redirect del router (che
+                          // ascolta AppState tramite refreshListenable) manda
+                          // già da solo a /login quando isSignedIn diventa
+                          // false. Un context.go('/login') qui in più correva
+                          // in parallelo con quel redirect automatico ed era
+                          // la causa di un crash intermittente ("Duplicate
+                          // GlobalKey detected in widget tree", visto in log
+                          // reali) per doppia navigazione nello stesso frame.
+                          onTap: () => AppScope.of(context).appState.signOut(),
+                        ),
+                      ],
                     ),
-                  ],
+                  ]),
                 ),
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// Contenuto della testata quando e completamente espansa: avatar, nome,
+/// badge e l'anello dell'overall.
+class _HeroHeader extends StatelessWidget {
+  const _HeroHeader({
+    required this.profile,
+    required this.stats,
+    required this.elite,
+  });
+
+  final UserProfile profile;
+  final PlayerStats stats;
+  final bool elite;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = elite ? AppTheme.gold : AppTheme.primary;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Velatura di colore dietro tutta la testata: piu marcata per gli
+        // elite, cosi la card "brilla" di oro appena si apre la pagina
+        // invece di scoprirlo solo guardando l'anello.
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                accent.withValues(alpha: elite ? .16 : .08),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: accent.withValues(alpha: .6),
+                          width: elite ? 2.8 : 2.2,
+                        ),
+                      ),
+                      child: PlayerAvatar(
+                        name: profile.displayName,
+                        url: profile.avatarUrl,
+                        radius: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      profile.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontSize: 22),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '@${profile.username}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppTheme.muted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        if (profile.city != null &&
+                            profile.city!.trim().isNotEmpty) ...[
+                          const Text(
+                            '  ·  ',
+                            style: TextStyle(color: AppTheme.mutedSoft),
+                          ),
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 13,
+                            color: AppTheme.mutedSoft,
+                          ),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              profile.city!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppTheme.mutedSoft,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ProfileInfoPill(label: roleLabel(profile.primaryPosition)),
+                        if (footLabel(profile.preferredFoot) case final label?)
+                          ProfileInfoPill(
+                            label: label,
+                            icon: Icons.sports_soccer,
+                          ),
+                        if (skillLabel(profile.skillLevel) case final label?)
+                          ProfileInfoPill(
+                            label: label,
+                            icon: Icons.military_tech_outlined,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              OverallRing(
+                value: stats.overall,
+                elite: elite,
+                diameter: 96,
+                strokeWidth: 8.5,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Riga minima mostrata nella barra quando la testata e collassata dallo
+/// scroll: avatar piccolo + nome, cosi non si perde il riferimento a "di chi
+/// e questo profilo" mentre si scorre l'elenco sotto.
+class _CollapsedTitle extends StatelessWidget {
+  const _CollapsedTitle({required this.profile});
+
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    // FlexibleSpaceBar posiziona `title` in una fascia bassa e stretta (la
+    // stessa altezza della toolbar collassata): un Row con un secondo
+    // PlayerAvatar dentro sforava quello spazio ("BOTTOM OVERFLOWED"),
+    // percio qui resta solo un'etichetta di testo su una riga, vincolata in
+    // altezza cosi non puo mai eccedere la fascia disponibile.
+    return SizedBox(
+      height: kToolbarHeight - 20,
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          profile.displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            color: AppTheme.foreground,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tab "Panoramica": la fotografia del momento, statistiche stagionali e
+/// composizione dei risultati.
+class _OverviewSection extends StatelessWidget {
+  const _OverviewSection({super.key, required this.stats});
+
+  final PlayerStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        StatGrid(
+          tiles: [
+            StatTile(
+              label: 'Partite',
+              value: stats.matches,
+              icon: Icons.sports_soccer,
+            ),
+            StatTile(
+              label: 'Gol',
+              value: stats.goals,
+              icon: Icons.sports_score,
+            ),
+            StatTile(
+              label: 'Assist',
+              value: stats.assists,
+              icon: Icons.assistant_direction,
+            ),
+            StatTile(label: 'MVP', value: stats.mvp, icon: Icons.emoji_events),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'RISULTATI',
+                      style: TextStyle(
+                        color: AppTheme.muted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${stats.winRate}% win rate',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ResultsBar(
+                  wins: stats.wins,
+                  draws: stats.draws,
+                  losses: stats.losses,
+                ),
+                if (stats.matches == 0) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Nessuna partita completata: i numeri arrivano dopo il primo fischio.',
+                    style: TextStyle(color: AppTheme.muted, fontSize: 12.5),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Tab "Andamento": come si e arrivati a quei numeri, nel tempo.
+class _TrendSection extends StatelessWidget {
+  const _TrendSection({super.key, required this.history, required this.form});
+
+  final List<Map<String, dynamic>> history;
+  final List<String> form;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: RatingTrendChart(history: history),
+          ),
+        ),
+        if (form.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'FORMA RECENTE',
+                    style: TextStyle(
+                      color: AppTheme.muted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      for (final result in form) _FormDot(result: result),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -172,461 +578,6 @@ class _SectionLabel extends StatelessWidget {
       letterSpacing: 1.5,
     ),
   );
-}
-
-/// Blocco identita: avatar, nome, username, citta e badge del giocatore.
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.profile, required this.overall});
-
-  final UserProfile profile;
-  final int overall;
-
-  @override
-  Widget build(BuildContext context) {
-    // Sopra la soglia "elite" la card passa dal verde del marchio all'oro
-    // gia usato per fascia da capitano e trofei: e lo stesso principio delle
-    // card FIFA/FUT (le carte piu forti hanno una rifinitura diversa), reso
-    // pero con un solo scatto invece di una scala a piu colori, cosi resta
-    // leggibile come "eccellenza" e non come un semaforo di livelli.
-    final elite = overall >= _eliteOverallThreshold;
-    final accent = elite ? AppTheme.gold : AppTheme.primary;
-    return Card(
-      // Il bordo dorato si applica solo alle card elite: per tutte le altre
-      // lasciamo lo shape di default del tema (bordo verde tenue), cosi il
-      // trattamento "normale" resta identico a prima e non cambia look a chi
-      // non supera la soglia.
-      shape: elite
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-              side: const BorderSide(color: AppTheme.gold, width: 1.3),
-            )
-          : null,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          // Velatura di colore appena accennata (piu marcata per le card
-          // elite): stacca l'intestazione dal resto della pagina senza
-          // introdurre un colore nuovo rispetto al resto del tema.
-          gradient: LinearGradient(
-            colors: [
-              accent.withValues(alpha: elite ? .2 : .1),
-              Colors.transparent,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Anello attorno all'avatar: sulla card velata di colore il
-            // cerchio da solo aveva troppo poco contrasto e si confondeva col
-            // fondo.
-            Container(
-              padding: const EdgeInsets.all(2.5),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: accent.withValues(alpha: .55),
-                  width: elite ? 2.5 : 2,
-                ),
-              ),
-              child: PlayerAvatar(
-                name: profile.displayName,
-                url: profile.avatarUrl,
-                radius: 27,
-              ),
-            ),
-            const SizedBox(height: 14),
-            // Gerarchia tipografica esplicita: il nome e il titolo della
-            // card (titleLarge, gia in grassetto pesante dal tema), lo
-            // username e un metadato secondario, la citta un terzo livello
-            // ancora piu discreto. Prima citta non compariva affatto qui
-            // pur essendo un dato gia raccolto in fase di onboarding.
-            Text(
-              profile.displayName,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '@${profile.username}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppTheme.muted, fontSize: 13),
-            ),
-            if (profile.city != null && profile.city!.trim().isNotEmpty) ...[
-              const SizedBox(height: 3),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    size: 13,
-                    color: AppTheme.mutedSoft,
-                  ),
-                  const SizedBox(width: 3),
-                  Flexible(
-                    child: Text(
-                      profile.city!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppTheme.mutedSoft,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 12),
-            // Badge del ruolo, piede preferito e livello: dati gia raccolti
-            // nell'editor ma prima assenti dalla card principale, dove
-            // l'utente li vede senza dover aprire "Modifica profilo". Un
-            // Wrap invece di una Row fissa cosi non serve gestire l'overflow
-            // quando compaiono tutti e tre insieme su schermi stretti.
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _InfoPill(label: _roleLabel(profile.primaryPosition)),
-                if (_footLabel(profile.preferredFoot) case final label?)
-                  _InfoPill(label: label, icon: Icons.sports_soccer),
-                if (_skillLabel(profile.skillLevel) case final label?)
-                  _InfoPill(label: label, icon: Icons.military_tech_outlined),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Soglia di overall oltre la quale la card riceve il trattamento "elite"
-/// (bordo/gradiente dorato al posto del verde standard). 85 e volutamente
-/// alto: deve restare un traguardo raro, non qualcosa che quasi tutti
-/// raggiungono subito.
-const _eliteOverallThreshold = 85;
-
-/// Badge coerente col resto della card (stessa pillola usata per il ruolo,
-/// non il `Chip` di Material) per non introdurre un secondo linguaggio
-/// visivo nella stessa tessera.
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label, this.icon});
-
-  final String label;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHigh,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.outline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: AppTheme.muted),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Tessera dell'overall, il numero che riassume il giocatore.
-class _OverallCard extends StatelessWidget {
-  const _OverallCard({required this.overall});
-
-  final int overall;
-
-  @override
-  Widget build(BuildContext context) {
-    // Stessa soglia della card identita: le due tessere della testata devono
-    // "scattare" di livello insieme, non una si e una no.
-    final elite = overall >= _eliteOverallThreshold;
-    return SizedBox(
-      width: 108,
-      child: Card(
-        // Tinta unita per il caso normale (invariato), nessun colore quando
-        // e la card elite: li il colore arriva dal gradiente sotto, messo su
-        // un Container invece che sul Card perche CardThemeData non supporta
-        // un gradiente come `color`.
-        color: elite ? null : AppTheme.primary,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        ),
-        child: Container(
-          decoration: elite
-              ? const BoxDecoration(
-                  // Oro verso verde: richiama la fascia da capitano ma
-                  // resta ancorato al colore del marchio, cosi non sembra un
-                  // badge scollegato dal resto dell'app.
-                  gradient: LinearGradient(
-                    colors: [AppTheme.gold, AppTheme.primary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                )
-              : null,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'OVERALL',
-                style: TextStyle(
-                  color: AppTheme.onPrimary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const SizedBox(height: 6),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '$overall',
-                  style: const TextStyle(
-                    color: AppTheme.onPrimary,
-                    fontSize: 44,
-                    height: 1,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Riga dei numeri principali, separati da divisori verticali.
-class _StatStrip extends StatelessWidget {
-  const _StatStrip({required this.stats});
-
-  final PlayerStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    const entries = [
-      ('Partite', 'matches'),
-      ('Gol', 'goals'),
-      ('Assist', 'assists'),
-      ('MVP', 'mvp'),
-    ];
-    int valueOf(String key) => switch (key) {
-      'matches' => stats.matches,
-      'goals' => stats.goals,
-      'assists' => stats.assists,
-      _ => stats.mvp,
-    };
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var index = 0; index < entries.length; index++) ...[
-                if (index > 0)
-                  const VerticalDivider(
-                    width: 1,
-                    thickness: 1,
-                    indent: 4,
-                    endIndent: 4,
-                    color: AppTheme.outline,
-                  ),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        entries[index].$1.toUpperCase(),
-                        style: const TextStyle(
-                          color: AppTheme.muted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          '${valueOf(entries[index].$2)}',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            height: 1,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Rendimento: barra del win rate piu esiti delle ultime partite.
-class _FormCard extends StatelessWidget {
-  const _FormCard({required this.stats, required this.form});
-
-  final PlayerStats stats;
-  final List<String> form;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'WIN RATE',
-                  style: TextStyle(
-                    color: AppTheme.muted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${stats.winRate}%',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -.5,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _WinRateBar(winRate: stats.winRate, hasMatches: stats.matches > 0),
-            const SizedBox(height: 10),
-            Text(
-              stats.matches == 0
-                  ? 'Nessuna partita completata: i numeri arrivano dopo il primo fischio.'
-                  : '${stats.wins} vinte · ${stats.draws} pareggiate · ${stats.losses} perse',
-              style: const TextStyle(color: AppTheme.muted, fontSize: 12.5),
-            ),
-            if (form.isNotEmpty) ...[
-              const Divider(height: 30, color: AppTheme.outline),
-              const Text(
-                'FORMA RECENTE',
-                style: TextStyle(
-                  color: AppTheme.muted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: [for (final result in form) _FormDot(result: result)],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Barra rosso-giallo-verde con l'indicatore sulla percentuale di vittorie.
-class _WinRateBar extends StatelessWidget {
-  const _WinRateBar({required this.winRate, required this.hasMatches});
-
-  final int winRate;
-  final bool hasMatches;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const height = 8.0;
-        const markerWidth = 4.0;
-        final position =
-            (constraints.maxWidth - markerWidth) *
-            (winRate.clamp(0, 100) / 100);
-        return SizedBox(
-          height: height,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    // Senza partite la scala resta spenta: una barra colorata
-                    // con l'indicatore a zero suggerirebbe un dato che non c'e.
-                    gradient: hasMatches
-                        ? const LinearGradient(
-                            colors: [
-                              Color(0xFFFF5A5A),
-                              Color(0xFFFFC24D),
-                              AppTheme.primary,
-                            ],
-                          )
-                        : null,
-                    color: hasMatches ? null : AppTheme.surfaceHigh,
-                  ),
-                ),
-              ),
-              if (hasMatches)
-                Positioned(
-                  left: position,
-                  child: Container(
-                    width: markerWidth,
-                    height: height,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: .5),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }
 
 /// Pillola dell'esito di una partita: vittoria, pareggio o sconfitta.
@@ -658,6 +609,33 @@ class _FormDot extends StatelessWidget {
           fontWeight: FontWeight.w900,
           fontSize: 12,
         ),
+      ),
+    );
+  }
+}
+
+/// Contenitore della lista Account: stessa Card di prima, ma con i divisori
+/// rientrati sotto al testo (come le liste raggruppate di iOS) invece che a
+/// tutta larghezza, cosi non tagliano anche l'icona.
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i < children.length - 1)
+              const Padding(
+                padding: EdgeInsets.only(left: 65),
+                child: Divider(height: 1),
+              ),
+          ],
+        ],
       ),
     );
   }
@@ -836,31 +814,3 @@ class _NotificationPreferencesSheetState
     );
   }
 }
-
-String _roleLabel(String? role) => switch (role) {
-  'goalkeeper' => 'Portiere',
-  'defender' => 'Difensore',
-  'midfielder' => 'Centrocampista',
-  'forward' => 'Attaccante',
-  _ => 'Giocatore',
-};
-
-/// Stesse etichette di `profile_editor_page.dart`, cosi il piede indicato
-/// qui e quello scelto in fase di modifica coincidono sempre alla lettera.
-/// Torna `null` (invece di un valore di default) quando il dato manca:
-/// a differenza del ruolo, non ha senso mostrare un piede "inventato".
-String? _footLabel(String? foot) => switch (foot) {
-  'right' => 'Destro',
-  'left' => 'Sinistro',
-  'both' => 'Entrambi',
-  _ => null,
-};
-
-/// Idem per il livello: stesse tre voci dell'editor, nessun default quando
-/// il valore non e ancora stato impostato.
-String? _skillLabel(String? level) => switch (level) {
-  'beginner' => 'Principiante',
-  'amateur' => 'Amatore',
-  'competitive' => 'Competitivo',
-  _ => null,
-};

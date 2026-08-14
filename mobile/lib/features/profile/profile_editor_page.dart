@@ -173,59 +173,79 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
                 _subtitle,
                 style: const TextStyle(color: AppTheme.muted, height: 1.45),
               ),
-              const SizedBox(height: 24),
-              Card(
+              const SizedBox(height: 8),
+              // Avatar grande e centrato con il badge fotocamera in basso a
+              // destra, come le schermate di modifica profilo di iOS (Foto,
+              // Contatti): prima era una riga di Card con un cerchio piccolo
+              // a sinistra, che sembrava un'impostazione qualunque invece
+              // che il ritratto del giocatore.
+              Center(
                 child: InkWell(
                   onTap: _pickAvatar,
-                  // Stesso raggio delle Card del tema (AppTheme.radiusLg),
-                  // invece del 22 scritto a mano: prima l'effetto ripple del
-                  // tocco usciva leggermente dagli angoli arrotondati della
-                  // card che lo contiene.
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 30,
+                  customBorder: const CircleBorder(),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: AppTheme.outlineSolid, width: 1.5),
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 44,
+                          backgroundColor: AppTheme.surfaceHigh,
                           backgroundImage: _avatarBytes == null
                               ? null
                               : MemoryImage(_avatarBytes!),
                           child: _avatarBytes == null
-                              ? const Icon(Icons.camera_alt_outlined)
+                              ? const Icon(
+                                  Icons.person_outline,
+                                  size: 34,
+                                  color: AppTheme.muted,
+                                )
                               : null,
                         ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Foto profilo',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                              SizedBox(height: 4),
-                              // "Facoltativa" in testa: né il form né il
-                              // salvataggio la richiedono, e specie in
-                              // onboarding va detto subito per non dare
-                              // l'idea di un altro passaggio obbligato.
-                              Text(
-                                'Facoltativa · JPG, PNG o WebP, max 5 MB',
-                                style: TextStyle(
-                                  color: AppTheme.muted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppTheme.background,
+                              width: 3,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            size: 15,
+                            color: AppTheme.onPrimary,
                           ),
                         ),
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
+              // "Facoltativa" in testa: né il form né il salvataggio la
+              // richiedono, e specie in onboarding va detto subito per non
+              // dare l'idea di un altro passaggio obbligato.
+              const Center(
+                child: Text(
+                  'Facoltativa · JPG, PNG o WebP, max 5 MB',
+                  style: TextStyle(color: AppTheme.muted, fontSize: 11.5),
+                ),
+              ),
+              const SizedBox(height: 22),
               Form(
                 key: _formKey,
                 child: Column(
