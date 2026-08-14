@@ -42,13 +42,13 @@ dependencies:
   flutter_local_notifications: 19.4.2
   # Task periodico che controlla le notifiche non lette ad app chiusa, così il
   # telefono avvisa anche senza un canale push FCM/APNs configurato.
-  workmanager: 0.9.0+3
+  workmanager: 0.10.7
   # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
   # che gira in un isolate separato senza accesso allo stato dell'app.
   shared_preferences: 2.5.5
   # Keychain (iOS) / Keystore (Android) per i token di sessione Supabase: senza
   # questo finiscono in SharedPreferences/NSUserDefaults in chiaro.
-  flutter_secure_storage: 11.0.0
+  flutter_secure_storage: 10.3.1
   # Sign in with Google, flusso nativo con ID token verificato da Supabase.
   google_sign_in: 7.2.0
   # Sign in with Apple, obbligatorio su iOS se si offre un altro login social.
