@@ -98,10 +98,30 @@ class _KicklyBottomBar extends StatelessWidget {
       2 => 1,
       _ => selectedIndex,
     };
+    // Prima era un rettangolo nero piatto con angoli squadrati incollato al
+    // bordo schermo: stonava con il resto dell'app, tutta fatta di card
+    // arrotondate. Angoli alti tondi + un leggero gradiente verso la
+    // superficie delle card (invece del nero pieno) + un'ombra verso l'alto
+    // la fanno leggere come un pannello sospeso sopra il contenuto, non come
+    // un bordo tagliato di netto.
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFA0B0D0C),
-        border: Border(top: BorderSide(color: AppTheme.outline)),
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusXl),
+        ),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppTheme.surface, Color(0xFA0B0D0C)],
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.outline)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .38),
+            blurRadius: 28,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
       padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
       child: SizedBox(
@@ -169,10 +189,24 @@ class _KicklyBottomBar extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            active ? item.$2 : item.$1,
-            size: 21,
-            color: active ? AppTheme.primary : AppTheme.muted,
+          // Pillola morbida dietro l'icona attiva: rinforza lo stato
+          // selezionato con lo stesso linguaggio "pill" arrotondato già usato
+          // per badge e filtri nel resto dell'app, invece del solo cambio
+          // colore che si perdeva nel nuovo sfondo sfumato.
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
+            decoration: BoxDecoration(
+              color: active
+                  ? AppTheme.primary.withValues(alpha: .14)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Icon(
+              active ? item.$2 : item.$1,
+              size: 21,
+              color: active ? AppTheme.primary : AppTheme.muted,
+            ),
           ),
           const SizedBox(height: 3),
           Text(

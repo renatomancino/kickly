@@ -188,6 +188,62 @@ class _AuthPageState extends State<AuthPage> {
                     style: const TextStyle(color: AppTheme.muted, fontSize: 15),
                   ),
                   const SizedBox(height: 32),
+                  // Il pattern Figma di riferimento (login multi-social, es.
+                  // schermate "X"/"LinkedIn") mette i provider social subito
+                  // in evidenza come blocco pieno di bottoni impilati, e
+                  // relega il form email/password a un secondo blocco sotto
+                  // un divisore "oppure". La condizione di visibilità resta
+                  // identica a prima (solo login/signup, solo se almeno un
+                  // provider è configurato): cambia solo l'ORDINE con cui i
+                  // blocchi compaiono, non il comportamento sottostante.
+                  if ((widget.variant == AuthVariant.login ||
+                          widget.variant == AuthVariant.signup) &&
+                      (scope.config.hasGoogleSignIn || _showAppleButton)) ...[
+                    if (scope.config.hasGoogleSignIn)
+                      SizedBox(
+                        width: double.infinity,
+                        // Altezza leggermente maggiore del default del tema
+                        // (48): nel pattern Figma i bottoni social sono il
+                        // primo elemento toccato dall'utente, quindi meritano
+                        // un target più "generoso" rispetto ai controlli
+                        // secondari.
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: _loading
+                              ? null
+                              : () => _signInWithProvider(
+                                  scope.repository.signInWithGoogle,
+                                ),
+                          icon: const _GoogleMark(),
+                          label: const Text('Continua con Google'),
+                        ),
+                      ),
+                    if (_showAppleButton) ...[
+                      if (scope.config.hasGoogleSignIn)
+                        // Spaziatura più ampia del solito (14 invece di 10)
+                        // fra i bottoni social impilati, com'è nel pattern
+                        // Figma preso a riferimento.
+                        const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: SignInWithAppleButton(
+                          onPressed: _loading
+                              ? null
+                              : () => _signInWithProvider(
+                                  scope.repository.signInWithApple,
+                                ),
+                          style: SignInWithAppleButtonStyle.white,
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMd,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 26),
+                    const _OrDivider(),
+                    const SizedBox(height: 22),
+                  ],
                   Form(
                     key: _formKey,
                     child: Column(
@@ -297,48 +353,6 @@ class _AuthPageState extends State<AuthPage> {
                       }),
                     ),
                   ),
-                  // Solo su login/signup: su "password dimenticata" e
-                  // "aggiorna password" un login social non ha senso — non
-                  // esiste una password da recuperare o cambiare.
-                  if ((widget.variant == AuthVariant.login ||
-                          widget.variant == AuthVariant.signup) &&
-                      (scope.config.hasGoogleSignIn || _showAppleButton)) ...[
-                    const SizedBox(height: 22),
-                    const _OrDivider(),
-                    const SizedBox(height: 18),
-                    if (scope.config.hasGoogleSignIn)
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _loading
-                              ? null
-                              : () => _signInWithProvider(
-                                  scope.repository.signInWithGoogle,
-                                ),
-                          icon: const _GoogleMark(),
-                          label: const Text('Continua con Google'),
-                        ),
-                      ),
-                    if (_showAppleButton) ...[
-                      if (scope.config.hasGoogleSignIn)
-                        const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: SignInWithAppleButton(
-                          onPressed: _loading
-                              ? null
-                              : () => _signInWithProvider(
-                                  scope.repository.signInWithApple,
-                                ),
-                          style: SignInWithAppleButtonStyle.white,
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.radiusMd,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
                   if (scope.repository.isDemo &&
                       widget.variant == AuthVariant.login) ...[
                     const SizedBox(height: 12),
