@@ -297,6 +297,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
               );
             }
             return PageFrame(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
               child: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
@@ -314,244 +315,385 @@ class _MatchFormPageState extends State<MatchFormPage> {
                         'Tutti i membri riceveranno l’aggiornamento in Kickly.',
                         style: TextStyle(color: AppTheme.muted),
                       ),
-                      const SizedBox(height: 24),
-                      DropdownButtonFormField<String>(
-                        initialValue: _leagueId,
-                        decoration: const InputDecoration(labelText: 'Lega'),
-                        items: managed
-                            .map(
-                              (league) => DropdownMenuItem(
-                                value: league.id,
-                                child: Text(league.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: widget.matchId == null
-                            ? (value) => setState(() => _leagueId = value)
-                            : null,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _title,
-                        decoration: const InputDecoration(labelText: 'Titolo'),
-                        validator: _required,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _description,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Descrizione',
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      InkWell(
-                        onTap: _pickDateTime,
-                        borderRadius: BorderRadius.circular(14),
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Data e ora',
-                            prefixIcon: Icon(Icons.event),
-                          ),
-                          child: Text(
-                            DateFormat(
-                              'EEEE d MMMM y · HH:mm',
-                              'it_IT',
-                            ).format(_startsAt),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _location,
-                        decoration: const InputDecoration(
-                          labelText: 'Campo / centro sportivo',
-                        ),
-                        validator: _required,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _address,
-                        decoration: const InputDecoration(
-                          labelText: 'Indirizzo completo del campo',
-                        ),
-                        validator: _required,
-                      ),
-                      const SizedBox(height: 14),
-                      ItalianMunicipalityField(
-                        key: ValueKey(
-                          '${_place?.city}|${_place?.province}|${widget.matchId}',
-                        ),
-                        initialCity: _place?.city,
-                        initialProvince: _place?.province,
-                        initialLatitude: _place?.latitude,
-                        initialLongitude: _place?.longitude,
-                        onSelected: (place) => _place = place,
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _venuePhone,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Telefono del campo',
-                          helperText: 'Visibile ai partecipanti per prenotare il campo.',
-                          prefixIcon: Icon(Icons.phone_outlined),
-                        ),
-                        validator: (value) {
-                          final phone = value?.trim() ?? '';
-                          if (phone.isEmpty) {
-                            return 'Numero del campo obbligatorio.';
-                          }
-                          return RegExp(r'^[0-9+() .-]{6,30}$').hasMatch(phone)
-                              ? null
-                              : 'Numero non valido.';
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
+                      const SizedBox(height: 22),
+
+                      // 1. Di cosa si tratta.
+                      _FormSection(
+                        eyebrow: 'La partita',
+                        icon: Icons.sports_soccer,
                         children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _format,
+                          // La tendina lega compare solo se c'e davvero una
+                          // scelta da fare: con una lega sola era un campo
+                          // inerte in cima al modulo.
+                          if (managed.length > 1) ...[
+                            DropdownButtonFormField<String>(
+                              initialValue: _leagueId,
+                              isExpanded: true,
                               decoration: const InputDecoration(
-                                labelText: 'Formato',
+                                labelText: 'Lega',
+                                prefixIcon: Icon(Icons.shield_outlined),
                               ),
-                              items:
-                                  const ['5v5', '7v7', '8v8', '10v10', '11v11']
-                                      .map(
-                                        (value) => DropdownMenuItem(
-                                          value: value,
-                                          child: Text(value),
+                              items: managed
+                                  .map(
+                                    (league) => DropdownMenuItem(
+                                      value: league.id,
+                                      child: Text(
+                                        league.name,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: widget.matchId == null
+                                  ? (value) => setState(() => _leagueId = value)
+                                  : null,
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          TextFormField(
+                            controller: _title,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              labelText: 'Titolo',
+                              hintText: 'Es. Partita del giovedì',
+                            ),
+                            validator: _required,
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _description,
+                            maxLines: 3,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              labelText: 'Descrizione',
+                              hintText: 'Opzionale: ritrovo, spogliatoi, note',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 2. Quando: la data merita piu peso di una riga di
+                      // testo, e il primo dato che un giocatore cerca.
+                      _FormSection(
+                        eyebrow: 'Quando',
+                        icon: Icons.event,
+                        children: [
+                          InkWell(
+                            onTap: _pickDateTime,
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMd,
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: .08),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMd,
+                                ),
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(alpha: .3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          DateFormat(
+                                            'EEEE d MMMM y',
+                                            'it_IT',
+                                          ).format(_startsAt),
+                                          style: const TextStyle(
+                                            color: AppTheme.muted,
+                                            fontSize: 12.5,
+                                          ),
                                         ),
-                                      )
-                                      .toList(),
-                              onChanged: (value) => _setFormat(value!),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: '$_maxPlayers',
-                              key: ValueKey(_maxPlayers),
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Giocatori',
-                              ),
-                              onChanged: (value) => setState(
-                                () => _maxPlayers =
-                                    int.tryParse(value) ?? _maxPlayers,
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          DateFormat('HH:mm').format(_startsAt),
+                                          style: const TextStyle(
+                                            fontSize: 26,
+                                            height: 1.1,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: -1,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.edit_calendar_outlined,
+                                    color: AppTheme.primary,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 14),
-                      Row(
+
+                      // 3. Dove.
+                      _FormSection(
+                        eyebrow: 'Dove si gioca',
+                        icon: Icons.location_on_outlined,
                         children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _cost,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              decoration: const InputDecoration(
-                                labelText: 'Costo totale €',
-                              ),
-                              onChanged: (_) => setState(() {}),
+                          TextFormField(
+                            controller: _location,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Campo / centro sportivo',
+                              prefixIcon: Icon(Icons.stadium_outlined),
                             ),
+                            validator: _required,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _visibility,
-                              decoration: const InputDecoration(
-                                labelText: 'Visibilità',
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'league_only',
-                                  child: Text('Solo lega'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'public',
-                                  child: Text('Pubblica'),
-                                ),
-                              ],
-                              onChanged: (value) =>
-                                  setState(() => _visibility = value!),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _address,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Indirizzo completo del campo',
+                              prefixIcon: Icon(Icons.signpost_outlined),
                             ),
+                            validator: _required,
+                          ),
+                          const SizedBox(height: 14),
+                          ItalianMunicipalityField(
+                            key: ValueKey(
+                              '${_place?.city}|${_place?.province}|${widget.matchId}',
+                            ),
+                            initialCity: _place?.city,
+                            initialProvince: _place?.province,
+                            initialLatitude: _place?.latitude,
+                            initialLongitude: _place?.longitude,
+                            onSelected: (place) => _place = place,
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _venuePhone,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: 'Telefono del campo',
+                              helperText: 'Serve ai partecipanti per prenotare il campo.',
+                              prefixIcon: Icon(Icons.phone_outlined),
+                            ),
+                            validator: (value) {
+                              final phone = value?.trim() ?? '';
+                              if (phone.isEmpty) {
+                                return 'Numero del campo obbligatorio.';
+                              }
+                              return RegExp(r'^[0-9+() .-]{6,30}$')
+                                      .hasMatch(phone)
+                                  ? null
+                                  : 'Numero non valido.';
+                            },
                           ),
                         ],
                       ),
-                      if (double.tryParse(_cost.text.replaceAll(',', '.')) !=
-                          null) ...[
-                        const SizedBox(height: 9),
+                      const SizedBox(height: 14),
+
+                      // 4. Come si gioca: il formato come scelta a vista
+                      // invece che dentro a una tendina, sono cinque opzioni
+                      // e ci stanno tutte.
+                      _FormSection(
+                        eyebrow: 'Come si gioca',
+                        icon: Icons.groups_outlined,
+                        children: [
+                          const _FieldLabel('Formato'),
+                          const SizedBox(height: 9),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final value in const [
+                                '5v5',
+                                '7v7',
+                                '8v8',
+                                '10v10',
+                                '11v11',
+                              ])
+                                _SelectableChip(
+                                  label: value.replaceAll('v', ' vs '),
+                                  selected: _format == value,
+                                  onTap: () => _setFormat(value),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            initialValue: '$_maxPlayers',
+                            key: ValueKey(_maxPlayers),
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Giocatori totali',
+                              helperText: 'Precompilato dal formato, modificalo se serve.',
+                              prefixIcon: Icon(Icons.person_add_alt_outlined),
+                            ),
+                            onChanged: (value) => setState(
+                              () => _maxPlayers =
+                                  int.tryParse(value) ?? _maxPlayers,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const _FieldLabel('Chi la può vedere'),
+                          const SizedBox(height: 9),
+                          _VisibilityPicker(
+                            value: _visibility,
+                            onChanged: (value) =>
+                                setState(() => _visibility = value),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 5. Soldi.
+                      _FormSection(
+                        eyebrow: 'Quanto costa',
+                        icon: Icons.payments_outlined,
+                        children: [
+                          TextFormField(
+                            controller: _cost,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Costo totale del campo',
+                              hintText: 'Opzionale',
+                              prefixText: '€ ',
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          if (_quotaPerPlayer != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: .1),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMd,
+                                ),
+                                border: Border.all(
+                                  color: AppTheme.primary.withValues(
+                                    alpha: .35,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.pie_chart_outline,
+                                    size: 18,
+                                    color: AppTheme.primary,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '€ ${_quotaPerPlayer!.toStringAsFixed(2)} a persona su $_maxPlayers giocatori',
+                                      style: const TextStyle(
+                                        color: AppTheme.primary,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 6. Immagini.
+                      _FormSection(
+                        eyebrow: 'Foto',
+                        icon: Icons.photo_library_outlined,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _MediaPicker(
+                                  label: 'Copertina',
+                                  bytes: _coverBytes,
+                                  icon: Icons.photo_camera_back_outlined,
+                                  onTap: () => _pickImage(venue: false),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _MediaPicker(
+                                  label: 'Foto campo',
+                                  bytes: _venueBytes,
+                                  icon: Icons.stadium_outlined,
+                                  onTap: () => _pickImage(venue: true),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
                         Container(
-                          width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFC7FF3D)
-                                .withValues(alpha: .10),
-                            borderRadius: BorderRadius.circular(14),
+                            color: AppTheme.danger.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMd,
+                            ),
                             border: Border.all(
-                              color: const Color(0xFFC7FF3D)
-                                  .withValues(alpha: .35),
+                              color: AppTheme.danger.withValues(alpha: .4),
                             ),
                           ),
-                          child: Text(
-                            'Quota: € ${(double.parse(_cost.text.replaceAll(',', '.')) / _maxPlayers).toStringAsFixed(2)} a persona',
-                            style: const TextStyle(
-                              color: Color(0xFFC7FF3D),
-                              fontWeight: FontWeight.w900,
-                            ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: AppTheme.danger,
+                                size: 19,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: AppTheme.danger,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                      const SizedBox(height: 18),
-                      Text(
-                        'Foto della partita',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _MediaPicker(
-                              label: 'Copertina',
-                              bytes: _coverBytes,
-                              icon: Icons.photo_camera_back_outlined,
-                              onTap: () => _pickImage(venue: false),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _MediaPicker(
-                              label: 'Foto campo',
-                              bytes: _venueBytes,
-                              icon: Icons.stadium_outlined,
-                              onTap: () => _pickImage(venue: true),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 15),
-                        Text(
-                          _error!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 25),
+                      const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
-                        child: FilledButton(
+                        child: FilledButton.icon(
                           onPressed: _loading ? null : _submit,
-                          child: _loading
-                              ? const CircularProgressIndicator()
-                              : const Text('Pubblica partita'),
+                          icon: _loading
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  widget.matchId == null
+                                      ? Icons.rocket_launch_outlined
+                                      : Icons.save_outlined,
+                                ),
+                          label: Text(
+                            widget.matchId == null
+                                ? 'Pubblica partita'
+                                : 'Salva modifiche',
+                          ),
                         ),
                       ),
                     ],
@@ -563,6 +705,16 @@ class _MatchFormPageState extends State<MatchFormPage> {
         ),
       ),
     );
+  }
+
+  /// Quota a testa, o null se il costo non è un numero valido.
+  ///
+  /// Accetta sia la virgola sia il punto come separatore decimale, perché su
+  /// tastiera italiana viene naturale scrivere "110,50".
+  double? get _quotaPerPlayer {
+    final total = double.tryParse(_cost.text.replaceAll(',', '.'));
+    if (total == null || _maxPlayers <= 0) return null;
+    return total / _maxPlayers;
   }
 
   static String? _required(String? value) =>
@@ -617,4 +769,206 @@ class _MediaPicker extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Blocco del modulo: un titolino con icona e un gruppo di campi dentro a una
+/// card.
+///
+/// Prima il modulo era una colonna di dodici campi identici uno sotto l'altro:
+/// niente diceva cosa stava insieme a cosa, e per capire a che punto eri
+/// dovevi leggere le etichette una per una.
+class _FormSection extends StatelessWidget {
+  const _FormSection({
+    required this.eyebrow,
+    required this.icon,
+    required this.children,
+  });
+
+  final String eyebrow;
+  final IconData icon;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 16, color: AppTheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  eyebrow.toUpperCase(),
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Etichetta di un campo che non e un TextField, quindi non ha un labelText.
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      color: AppTheme.muted,
+      fontSize: 12.5,
+      fontWeight: FontWeight.w700,
+    ),
+  );
+}
+
+/// Pillola selezionabile, usata per il formato della partita.
+class _SelectableChip extends StatelessWidget {
+  const _SelectableChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primary : AppTheme.surfaceHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? AppTheme.primary : AppTheme.outline,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppTheme.onPrimary : AppTheme.foreground,
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Scelta della visibilita con le conseguenze scritte accanto.
+///
+/// In una tendina "Solo lega" e "Pubblica" sono due parole senza contesto: qui
+/// si vede subito chi finira per vedere la partita.
+class _VisibilityPicker extends StatelessWidget {
+  const _VisibilityPicker({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const options = [
+      (
+        'league_only',
+        'Solo lega',
+        'La vedono i membri della lega',
+        Icons.shield_outlined,
+      ),
+      (
+        'public',
+        'Pubblica',
+        'Visibile anche ai giocatori vicini',
+        Icons.public,
+      ),
+    ];
+    return Column(
+      children: [
+        for (final option in options) ...[
+          if (option != options.first) const SizedBox(height: 9),
+          GestureDetector(
+            onTap: () => onChanged(option.$1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: value == option.$1
+                    ? AppTheme.primary.withValues(alpha: .1)
+                    : AppTheme.surfaceHigh,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(
+                  color: value == option.$1
+                      ? AppTheme.primary.withValues(alpha: .55)
+                      : AppTheme.outline,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    option.$4,
+                    size: 19,
+                    color: value == option.$1
+                        ? AppTheme.primary
+                        : AppTheme.muted,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          option.$2,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          option.$3,
+                          style: const TextStyle(
+                            color: AppTheme.muted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    value == option.$1
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 19,
+                    color: value == option.$1
+                        ? AppTheme.primary
+                        : AppTheme.outlineSolid,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
