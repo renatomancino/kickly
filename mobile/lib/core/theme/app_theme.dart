@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Tema Kickly, allineato ai token di `src/app/globals.css` della PWA.
 ///
@@ -64,23 +63,15 @@ class AppTheme {
   /// Fogli modali e contenitori grandi.
   static const radiusXl = 26.0;
 
-  /// Font dell'interfaccia.
+  /// Font dell'interfaccia: lo stesso Geist della PWA.
   ///
-  /// La PWA usa Geist, che però è distribuito da Vercel e non è nel catalogo
-  /// Google Fonts: da Flutter non è raggiungibile senza impacchettare i file
-  /// del font nel repository. Inter è il parente più stretto — stessa
-  /// impostazione neogrottesca, altezza della x e larghezze molto simili — ed è
-  /// comunque un salto enorme rispetto al Roboto/SF di sistema che l'app usava
-  /// prima, che è la ragione principale per cui sembrava un'altra applicazione
-  /// rispetto al web.
-  ///
-  /// Per la parità esatta basta aggiungere i .ttf di Geist in `assets/fonts/` e
-  /// sostituire questa riga con un `TextTheme` che usa `fontFamily: 'Geist'`.
-  ///
-  /// google_fonts scarica e mette in cache il file al primo utilizzo; finché
-  /// non è pronto Flutter ripiega sul font di sistema, quindi l'avvio non
-  /// dipende dalla rete.
-  static TextTheme _fontOf(TextTheme base) => GoogleFonts.interTextTheme(base);
+  /// I file stanno in `assets/fonts/` perché Geist è distribuito da Vercel e
+  /// non è nel catalogo Google Fonts. Essendo impacchettati nell'app, il font
+  /// è disponibile dal primo frame: nessuna dipendenza dalla rete e nessuno
+  /// sfarfallio con il font di sistema all'avvio.
+  static const fontFamily = 'Geist';
+
+  static TextTheme _fontOf(TextTheme base) => base.apply(fontFamily: fontFamily);
 
   static ThemeData get dark {
     const colors = ColorScheme.dark(
@@ -109,6 +100,10 @@ class AppTheme {
 
     final base = ThemeData(
       brightness: Brightness.dark,
+      // Anche a livello di tema, non solo di textTheme: così lo prendono pure
+      // i widget che costruiscono uno stile da zero (tooltip, date picker,
+      // menu di sistema) invece di ricadere sul font di sistema.
+      fontFamily: fontFamily,
       colorScheme: colors,
       // Trasparente di proposito: lo sfondo (nero pieno più alone verde) lo
       // dipinge `KicklyBackdrop` una volta sola dietro a tutto, altrimenti ogni

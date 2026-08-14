@@ -10,8 +10,11 @@ La versione mobile mantiene la parità funzionale con la PWA: dashboard, profili
 - `supabase_flutter` per Auth, Database, Storage e sessioni persistenti
 - `go_router` per routing e deep link
 - `flutter_local_notifications` + `workmanager` per i banner di sistema
-- `google_fonts` (Inter) per avvicinare la tipografia a quella della PWA
 - accesso diretto alle RPC Supabase già protette da RLS
+
+Il font è **Geist**, lo stesso della PWA. Non essendo nel catalogo Google Fonts,
+i TTF statici del release ufficiale `vercel/geist-font` sono impacchettati in
+`assets/fonts/` (licenza SIL OFL 1.1 in `assets/fonts/LICENSE.txt`).
 
 Android richiede il core library desugaring (già abilitato in
 `android/app/build.gradle.kts`), necessario a `flutter_local_notifications`.

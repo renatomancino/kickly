@@ -46,9 +46,6 @@ dependencies:
   # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
   # che gira in un isolate separato senza accesso allo stato dell'app.
   shared_preferences: 2.5.5
-  # Geist, lo stesso font della PWA: senza, l'app mobile ripiega su Roboto/SF
-  # ed è il singolo scarto estetico più evidente rispetto al web.
-  google_fonts: 6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +72,29 @@ flutter:
 
   assets:
     - assets/images/
+
+  # Geist, lo stesso font della PWA (next/font/google in src/app/layout.tsx).
+  # Non è nel catalogo Google Fonts, quindi i file vanno impacchettati qui:
+  # sono i TTF statici del release ufficiale vercel/geist-font, licenza
+  # SIL OFL 1.1 (assets/fonts/LICENSE.txt).
+  # Pesi statici e non variabile: in Flutter il mapping di fontWeight su un
+  # font variabile dipende dalla piattaforma, con i pesi dichiarati uno a uno
+  # il risultato è identico ovunque.
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Geist-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Geist-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Geist-Black.ttf
+          weight: 900
 
 flutter_launcher_icons:
   android: true
