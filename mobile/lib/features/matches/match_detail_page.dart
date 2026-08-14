@@ -382,9 +382,12 @@ class _DetailsTab extends StatelessWidget {
                   ),
                   const Divider(height: 28),
                   if (match.postGame!.mvpFinalizedAt != null) ...[
+                    // Token invece del giallo scritto a mano: `AppTheme.gold`
+                    // è già pensato per questo caso ("oro... dei trofei"), qui
+                    // era rimasto un esadecimale non allineato al design system.
                     const Icon(
                       Icons.emoji_events,
-                      color: Color(0xFFFFD166),
+                      color: AppTheme.gold,
                       size: 30,
                     ),
                     const SizedBox(height: 7),
@@ -753,7 +756,10 @@ class _PostGameStats extends StatelessWidget {
                       ? '—'
                       : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1)}',
                   style: TextStyle(
-                    color: delta >= 0 ? AppTheme.primary : Colors.redAccent,
+                    // `AppTheme.danger` invece di `Colors.redAccent`: è lo
+                    // stesso rosso usato per le sconfitte nel profilo privato,
+                    // non un rosso Material scollegato dal resto del tema.
+                    color: delta >= 0 ? AppTheme.primary : AppTheme.danger,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -802,7 +808,10 @@ class _ResponseButton extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
-              color: selected ? AppTheme.primary : Colors.white70,
+              // `AppTheme.muted` come l'icona qui sopra: prima la label usava
+              // `Colors.white70`, un grigio leggermente diverso da quello
+              // dell'icona nello stesso pulsante.
+              color: selected ? AppTheme.primary : AppTheme.muted,
             ),
           ),
         ],

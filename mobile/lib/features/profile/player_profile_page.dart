@@ -88,14 +88,12 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
               ),
             ),
             const SizedBox(height: 18),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: MediaQuery.sizeOf(context).width >= 700 ? 4 : 2,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 1.35,
-              children: [
+            // StatGrid invece di un GridView.count con childAspectRatio
+            // fisso: quel rapporto legava l'altezza alla larghezza della
+            // colonna e con il font di sistema ingrandito il numero usciva
+            // dalla tessera (lo stesso problema già risolto per la dashboard).
+            StatGrid(
+              tiles: [
                 StatTile(
                   label: 'Partite',
                   value: stats.matches,
@@ -151,27 +149,30 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
                     const SizedBox(height: 9),
                     Wrap(
                       spacing: 8,
-                      children: data.form
-                          .map(
-                            (r) => CircleAvatar(
-                              radius: 17,
-                              backgroundColor: r == 'win'
-                                  ? AppTheme.primary.withValues(alpha: .16)
-                                  : AppTheme.surfaceHigh,
-                              child: Text(
-                                r == 'win'
-                                    ? 'W'
-                                    : r == 'loss'
-                                    ? 'L'
-                                    : 'D',
-                                style: const TextStyle(
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
+                      children: data.form.map((r) {
+                        // Stessa palette per-esito della card "Forma recente"
+                        // del profilo privato (vittoria verde, sconfitta rossa,
+                        // pareggio grigio): prima ogni pallino era verde o
+                        // grigio a prescindere dall'esito, quindi una
+                        // sconfitta ("L") appariva con lo stesso colore del
+                        // marchio invece di leggere come un risultato negativo.
+                        final (label, color) = switch (r) {
+                          'win' => ('W', AppTheme.primary),
+                          'loss' => ('L', AppTheme.danger),
+                          _ => ('D', AppTheme.muted),
+                        };
+                        return CircleAvatar(
+                          radius: 17,
+                          backgroundColor: color.withValues(alpha: .16),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w900,
                             ),
-                          )
-                          .toList(),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
