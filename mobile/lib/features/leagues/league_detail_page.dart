@@ -88,7 +88,7 @@ class _LeagueDetailPageState extends State<LeagueDetailPage> {
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const ListSkeleton(items: 2);
                 }
                 if (snapshot.hasError) {
                   return PageFrame(
@@ -417,7 +417,7 @@ class _LeagueHome extends StatelessWidget {
                 Text(
                   detail.summary.description ??
                       'Una lega Kickly pronta per nuove partite e rivalità.',
-                  style: const TextStyle(color: Colors.white60),
+                  style: const TextStyle(color: AppTheme.muted),
                 ),
                 const SizedBox(height: 20),
                 Row(
@@ -487,7 +487,7 @@ class _Metric extends StatelessWidget {
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 10),
+          style: const TextStyle(color: AppTheme.muted, fontSize: 10),
         ),
       ],
     ),
@@ -694,7 +694,7 @@ class _Communications extends StatelessWidget {
                               Text(
                                 '@${item.authorUsername}',
                                 style: const TextStyle(
-                                  color: Colors.white54,
+                                  color: AppTheme.muted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -735,7 +735,7 @@ class _Communications extends StatelessWidget {
                     Text(
                       '${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}',
                       style: const TextStyle(
-                        color: Colors.white38,
+                        color: AppTheme.mutedSoft,
                         fontSize: 10,
                       ),
                     ),
@@ -1063,7 +1063,7 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: const TextStyle(color: Colors.white54)),
+      Text(label, style: const TextStyle(color: AppTheme.muted)),
       const Spacer(),
       Flexible(
         child: Text(

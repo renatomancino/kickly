@@ -45,7 +45,7 @@ class _ProfilePageState extends State<ProfilePage> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const ListSkeleton(items: 2);
           }
           if (snapshot.hasError || snapshot.data == null) {
             return ListView(
@@ -123,7 +123,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             const SizedBox(height: 4),
                             Text(
                               '@${profile.username}',
-                              style: const TextStyle(color: Colors.white54),
+                              style: const TextStyle(color: AppTheme.muted),
                             ),
                             const SizedBox(height: 9),
                             Chip(
@@ -219,7 +219,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       const Text(
                         'FORMA RECENTE',
                         style: TextStyle(
-                          color: Colors.white38,
+                          color: AppTheme.mutedSoft,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.2,
@@ -229,7 +229,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (data.form.isEmpty)
                         const Text(
                           'Nessuna partita completata.',
-                          style: TextStyle(color: Colors.white54),
+                          style: TextStyle(color: AppTheme.muted),
                         )
                       else
                         Wrap(
@@ -325,7 +325,7 @@ class _SmallStat extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 10),
+          style: const TextStyle(color: AppTheme.muted, fontSize: 10),
         ),
       ],
     ),
@@ -403,7 +403,7 @@ class _NotificationPreferencesSheetState
                   const SizedBox(height: 5),
                   const Text(
                     'Scegli quali aggiornamenti ricevere.',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(color: AppTheme.muted),
                   ),
                   const SizedBox(height: 14),
                   ...labels.entries.map(

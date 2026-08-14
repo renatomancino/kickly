@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 
 import '../../app.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -152,7 +153,7 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
             const SizedBox(height: 7),
             const Text(
               'Le modifiche si riflettono immediatamente anche nella PWA.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppTheme.muted),
             ),
             const SizedBox(height: 22),
             Form(
@@ -200,7 +201,7 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
                                   Text(
                                     'Tocca per sostituire · max 5 MB',
                                     style: TextStyle(
-                                      color: Colors.white54,
+                                      color: AppTheme.muted,
                                       fontSize: 11,
                                     ),
                                   ),

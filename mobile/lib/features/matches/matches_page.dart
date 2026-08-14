@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -58,7 +59,7 @@ class _MatchesPageState extends State<MatchesPage> {
                     const SizedBox(height: 5),
                     const Text(
                       'Trova un campo, unisciti e gioca.',
-                      style: TextStyle(color: Colors.white54),
+                      style: TextStyle(color: AppTheme.muted),
                     ),
                   ],
                 ),
@@ -110,7 +111,7 @@ class _MatchesPageState extends State<MatchesPage> {
               children: [
                 const Text(
                   'Raggio',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: AppTheme.muted, fontSize: 12),
                 ),
                 const Spacer(),
                 ...[25.0, 50.0, 100.0].map(
@@ -132,9 +133,14 @@ class _MatchesPageState extends State<MatchesPage> {
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 90),
-                  child: Center(child: CircularProgressIndicator()),
+                // Column e non ListSkeleton: qui siamo già dentro una
+                // ListView, annidare uno scroll romperebbe il gesto.
+                return const Column(
+                  children: [
+                    CardSkeleton(),
+                    SizedBox(height: 12),
+                    CardSkeleton(),
+                  ],
                 );
               }
               if (snapshot.hasError) {

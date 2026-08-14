@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
+import '../core/notifications/background_sync.dart';
+import '../core/notifications/notification_service.dart';
 import 'demo_data.dart';
 import 'models.dart';
 
@@ -948,13 +951,23 @@ class KicklyRepository {
     }
   }
 
-  Future<void> confirmFieldBooking(String matchId) async {
-    if (!isDemo) {
-      await client!.rpc(
-        'confirm_field_booking',
-        params: {'target_match': matchId},
-      );
-    }
+  /// Conferma la prenotazione del campo e avvisa i partecipanti.
+  ///
+  /// Restituisce l'istante della prenotazione, che la RPC fornisce già come
+  /// valore di ritorno. Prima veniva scartato e la card si affidava a un
+  /// ricaricamento dell'intera pagina per accorgersi del cambiamento: la
+  /// prenotazione finiva a buon fine sul database ma la schermata continuava a
+  /// mostrare "Prenota il campo", come se non fosse successo niente.
+  ///
+  /// La RPC è idempotente: se il campo è già prenotato restituisce l'istante
+  /// registrato in precedenza senza inviare una seconda notifica.
+  Future<DateTime?> confirmFieldBooking(String matchId) async {
+    if (isDemo) return DateTime.now();
+    final data = await client!.rpc(
+      'confirm_field_booking',
+      params: {'target_match': matchId},
+    );
+    return data == null ? null : asDate(data);
   }
 
   Future<String> uploadMatchImage({
@@ -1004,13 +1017,19 @@ class KicklyRepository {
     }
   }
 
-  Future<JsonMap> setLineupSlot(
+  /// Occupa uno slot del campo, spostandosi se il giocatore era già schierato.
+  ///
+  /// Con [captain] a true si candida anche come capitano della squadra, che è
+  /// l'unico ruolo non-admin autorizzato a cambiare modulo.
+  /// Restituisce lo stato aggiornato della formazione così che la pagina possa
+  /// ridisegnare il campo senza ricaricare l'intera partita.
+  Future<LineupSnapshot?> setLineupSlot(
     String matchId,
     int team,
     String slot, {
     bool captain = false,
   }) async {
-    if (isDemo) return const {};
+    if (isDemo) return null;
     final data = await client!.rpc(
       'set_match_lineup_slot',
       params: {
@@ -1020,33 +1039,59 @@ class KicklyRepository {
         'wants_captain': captain,
       },
     );
-    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+    return LineupSnapshot.fromRpc(data);
   }
 
-  Future<void> leaveLineup(String matchId) async {
-    if (!isDemo) {
-      await client!.rpc(
-        'leave_match_lineup',
-        params: {'target_match': matchId},
-      );
-    }
+  /// Libera la posizione del giocatore e, se lo era, gli toglie la fascia.
+  Future<LineupSnapshot?> leaveLineup(String matchId) async {
+    if (isDemo) return null;
+    final data = await client!.rpc(
+      'leave_match_lineup',
+      params: {'target_match': matchId},
+    );
+    return LineupSnapshot.fromRpc(data);
   }
 
-  Future<void> setLineupFormation(
+  /// Cambia il modulo di una squadra. La RPC accetta solo capitano della
+  /// squadra oppure owner/admin della lega, e solo moduli validi per il formato.
+  Future<LineupSnapshot?> setLineupFormation(
     String matchId,
     int team,
     String formation,
   ) async {
-    if (!isDemo) {
-      await client!.rpc(
-        'set_match_lineup_formation',
-        params: {
-          'target_match': matchId,
-          'target_team': team,
-          'target_formation': formation,
-        },
-      );
-    }
+    if (isDemo) return null;
+    final data = await client!.rpc(
+      'set_match_lineup_formation',
+      params: {
+        'target_match': matchId,
+        'target_team': team,
+        'target_formation': formation,
+      },
+    );
+    return LineupSnapshot.fromRpc(data);
+  }
+
+  /// Rilegge la formazione dal database.
+  ///
+  /// Usato quando arriva un evento Realtime: l'evento dice che qualcosa è
+  /// cambiato ma non porta con sé lo stato completo delle due tabelle.
+  Future<LineupSnapshot?> getLineup(String matchId) async {
+    if (isDemo) return null;
+    final results = await Future.wait<dynamic>([
+      client!
+          .from('match_lineup_teams')
+          .select('team_number, formation, captain_user_id')
+          .eq('match_id', matchId)
+          .order('team_number'),
+      client!
+          .from('match_lineup_players')
+          .select('user_id, team_number, slot_key')
+          .eq('match_id', matchId),
+    ]);
+    return LineupSnapshot(
+      teams: LineupSnapshot.rowsOf(results[0]),
+      players: LineupSnapshot.rowsOf(results[1]),
+    );
   }
 
   Future<int> sendMatchReminder(String matchId, String body) async {
@@ -1516,7 +1561,7 @@ double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
 
 double _radians(double degrees) => degrees * math.pi / 180;
 
-class AppState extends ChangeNotifier {
+class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppState({required this.repository});
 
   final KicklyRepository repository;
@@ -1528,18 +1573,31 @@ class AppState extends ChangeNotifier {
   KicklyNotification? latestNotification;
   int notificationRevision = 0;
 
+  /// L'app è visibile in questo momento?
+  ///
+  /// Decide come consegnare una notifica in arrivo: con l'app aperta basta la
+  /// SnackBar in-app, che non interrompe; con l'app in background serve il
+  /// banner di sistema, altrimenti l'avviso non esiste per l'utente.
+  bool _foreground = true;
+
   bool get initializing => _initializing;
   bool get isSignedIn =>
       repository.isDemo ? _demoSession : repository.currentUserId != null;
   bool get onboardingComplete => _onboardingComplete;
 
   Future<void> initialize() async {
+    WidgetsBinding.instance.addObserver(this);
     if (!repository.isDemo) {
       _authSubscription = repository.authStateChanges?.listen(
         (_) => refreshSession(),
       );
     }
     await refreshSession();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
   }
 
   Future<void> refreshSession() async {
@@ -1554,14 +1612,32 @@ class AppState extends ChangeNotifier {
         _onboardingComplete = false;
       }
       _listenForNotifications();
+      // Il permesso viene chiesto a sessione aperta, non al primo avvio: sulla
+      // schermata di login il motivo non è chiaro e si finisce col negarlo.
+      unawaited(_enableSystemNotifications());
     } else {
       _onboardingComplete = false;
       final channel = _notificationChannel;
       if (channel != null) channel.unsubscribe();
       _notificationChannel = null;
+      unawaited(stopNotificationPolling());
     }
     _initializing = false;
     notifyListeners();
+  }
+
+  /// Chiede il permesso notifiche e accende il controllo periodico che copre il
+  /// caso "app chiusa".
+  Future<void> _enableSystemNotifications() async {
+    if (repository.isDemo) return;
+    try {
+      await NotificationService.instance.requestPermission();
+      await startNotificationPolling();
+    } catch (error) {
+      // Un permesso negato o un task non registrabile non deve impedire l'uso
+      // dell'app: restano le notifiche in-app.
+      debugPrint('Notifiche di sistema non attivate: $error');
+    }
   }
 
   Future<void> startDemo() async {
@@ -1603,9 +1679,20 @@ class AppState extends ChangeNotifier {
             value: repository.currentUserId!,
           ),
           callback: (payload) {
-            latestNotification = KicklyNotification.fromMap(payload.newRecord);
+            final notification = KicklyNotification.fromMap(payload.newRecord);
+            latestNotification = notification;
             notificationRevision += 1;
             notifyListeners();
+
+            // Con l'app aperta la SnackBar in-app basta e non interrompe; con
+            // l'app in background l'unico modo per farla arrivare è il banner
+            // di sistema.
+            if (!_foreground) {
+              unawaited(NotificationService.instance.show(notification));
+            }
+            // In entrambi i casi la notifica è stata gestita: spostiamo il
+            // cursore così il controllo periodico non la ripubblica.
+            unawaited(markNotificationsSeen(notification.createdAt));
           },
         )
         .subscribe();
@@ -1613,6 +1700,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _notificationChannel?.unsubscribe();
     super.dispose();

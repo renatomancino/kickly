@@ -4,11 +4,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
+import 'core/notifications/notification_service.dart';
 import 'data/kickly_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('it_IT');
+
+  // Prima di runApp: se l'app è stata aperta toccando una notifica, il link di
+  // destinazione dev'essere già disponibile quando il router fa il primo
+  // redirect, altrimenti l'utente atterra sulla dashboard e il tap si perde.
+  await NotificationService.instance.initialize();
 
   final config = AppConfig.fromEnvironment();
   SupabaseClient? client;

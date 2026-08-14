@@ -29,6 +29,20 @@
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Kickly usa la libreria foto per aggiornare il tuo avatar.</string>
+	<!-- Background refresh: permette il controllo periodico delle notifiche
+	     quando l'app non e' in primo piano. Senza queste due chiavi iOS non
+	     risveglia mai il task e le notifiche arrivano solo ad app aperta. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<!-- Deve corrispondere all'uniqueName passato a registerPeriodicTask in
+	     lib/core/notifications/background_sync.dart. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>kickly-notification-poll-unique</string>
+	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

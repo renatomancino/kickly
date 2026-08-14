@@ -144,7 +144,7 @@ class _AuthPageState extends State<AuthPage> {
                   const SizedBox(height: 10),
                   Text(
                     _description,
-                    style: const TextStyle(color: Colors.white60, fontSize: 15),
+                    style: const TextStyle(color: AppTheme.muted, fontSize: 15),
                   ),
                   const SizedBox(height: 32),
                   Form(
@@ -270,7 +270,7 @@ class _AuthPageState extends State<AuthPage> {
                     const SizedBox(height: 9),
                     const Text(
                       'Supabase non configurato: la demo non salva dati.',
-                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                      style: TextStyle(color: AppTheme.mutedSoft, fontSize: 11),
                       textAlign: TextAlign.center,
                     ),
                   ],

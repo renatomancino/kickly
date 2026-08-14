@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../app.dart';
 import '../../core/location/italian_location_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -311,7 +312,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
                       const SizedBox(height: 7),
                       const Text(
                         'Tutti i membri riceveranno l’aggiornamento in Kickly.',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: AppTheme.muted),
                       ),
                       const SizedBox(height: 24),
                       DropdownButtonFormField<String>(
@@ -609,7 +610,7 @@ class _MediaPicker extends StatelessWidget {
             Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
             Text(
               bytes == null ? 'Aggiungi' : 'Cambia',
-              style: const TextStyle(color: Colors.white60, fontSize: 11),
+              style: const TextStyle(color: AppTheme.muted, fontSize: 11),
             ),
           ],
         ),

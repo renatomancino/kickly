@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import '../../app.dart';
 import '../../core/location/italian_location_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
@@ -118,191 +119,198 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
     appBar: widget.onboarding
         ? null
         : AppBar(title: const Text('Modifica profilo')),
-    body: FutureBuilder<UserProfile?>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-          children: [
-            const Text(
-              'LA TUA PLAYER CARD',
-              style: TextStyle(
-                color: Color(0xFFC7FF3D),
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.7,
+    // In onboarding non c'è AppBar, quindi senza SafeArea il titolo finiva
+    // sotto la status bar e il notch.
+    body: SafeArea(
+      bottom: false,
+      child: FutureBuilder<UserProfile?>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const ListSkeleton(items: 2);
+          }
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              const Text(
+                'LA TUA PLAYER CARD',
+                style: TextStyle(
+                  color: AppTheme.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.7,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              widget.onboarding ? 'Completa il profilo' : 'Profilo giocatore',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 7),
-            const Text(
-              'Le stesse informazioni mostrate nella PWA, aggiornate anche nelle leghe e nelle formazioni.',
-              style: TextStyle(color: Colors.white54, height: 1.45),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: InkWell(
-                onTap: _pickAvatar,
-                borderRadius: BorderRadius.circular(22),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundImage: _avatarBytes == null
-                            ? null
-                            : MemoryImage(_avatarBytes!),
-                        child: _avatarBytes == null
-                            ? const Icon(Icons.camera_alt_outlined)
-                            : null,
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Foto profilo',
-                              style: TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'JPG, PNG o WebP · max 5 MB',
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+              const SizedBox(height: 6),
+              Text(
+                widget.onboarding ? 'Completa il profilo' : 'Profilo giocatore',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 7),
+              const Text(
+                'Le stesse informazioni mostrate nella PWA, aggiornate anche nelle leghe e nelle formazioni.',
+                style: TextStyle(color: AppTheme.muted, height: 1.45),
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: InkWell(
+                  onTap: _pickAvatar,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 30,
+                          backgroundImage: _avatarBytes == null
+                              ? null
+                              : MemoryImage(_avatarBytes!),
+                          child: _avatarBytes == null
+                              ? const Icon(Icons.camera_alt_outlined)
+                              : null,
                         ),
-                      ),
-                      const Icon(Icons.chevron_right),
-                    ],
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Foto profilo',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'JPG, PNG o WebP · max 5 MB',
+                                style: TextStyle(
+                                  color: AppTheme.muted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: _field(_firstName, 'Nome')),
-                      const SizedBox(width: 12),
-                      Expanded(child: _field(_lastName, 'Cognome')),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _field(_username, 'Username', prefix: const Text('@')),
-                  const SizedBox(height: 14),
-                  _field(
-                    _birthDate,
-                    'Data di nascita',
-                    hint: 'AAAA-MM-GG',
-                    optional: true,
-                  ),
-                  const SizedBox(height: 14),
-                  ItalianMunicipalityField(
-                    key: ValueKey(
-                      '${snapshot.data?.city}|${snapshot.data?.province}',
+              const SizedBox(height: 14),
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _field(_firstName, 'Nome')),
+                        const SizedBox(width: 12),
+                        Expanded(child: _field(_lastName, 'Cognome')),
+                      ],
                     ),
-                    initialCity: snapshot.data?.city,
-                    initialProvince: snapshot.data?.province,
-                    initialLatitude: snapshot.data?.latitude,
-                    initialLongitude: snapshot.data?.longitude,
-                    onSelected: (place) => _place = place,
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _select(
-                          'Ruolo principale',
-                          _primary,
-                          _roles,
-                          (v) => setState(() => _primary = v!),
-                        ),
+                    const SizedBox(height: 14),
+                    _field(_username, 'Username', prefix: const Text('@')),
+                    const SizedBox(height: 14),
+                    _field(
+                      _birthDate,
+                      'Data di nascita',
+                      hint: 'AAAA-MM-GG',
+                      optional: true,
+                    ),
+                    const SizedBox(height: 14),
+                    ItalianMunicipalityField(
+                      key: ValueKey(
+                        '${snapshot.data?.city}|${snapshot.data?.province}',
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _select(
-                          'Ruolo secondario',
-                          _secondary ?? 'none',
-                          {'none': 'Nessuno', ..._roles},
-                          (v) => setState(
-                            () => _secondary = v == 'none' ? null : v,
+                      initialCity: snapshot.data?.city,
+                      initialProvince: snapshot.data?.province,
+                      initialLatitude: snapshot.data?.latitude,
+                      initialLongitude: snapshot.data?.longitude,
+                      onSelected: (place) => _place = place,
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _select(
+                            'Ruolo principale',
+                            _primary,
+                            _roles,
+                            (v) => setState(() => _primary = v!),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _select('Piede preferito', _foot, const {
-                          'right': 'Destro',
-                          'left': 'Sinistro',
-                          'both': 'Entrambi',
-                        }, (v) => setState(() => _foot = v!)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _select('Livello', _skill, const {
-                          'beginner': 'Principiante',
-                          'amateur': 'Amatore',
-                          'competitive': 'Competitivo',
-                        }, (v) => setState(() => _skill = v!)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: SwitchListTile(
-                      value: _public,
-                      onChanged: (v) => setState(() => _public = v),
-                      title: const Text(
-                        'Profilo pubblico',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      subtitle: const Text(
-                        'Mostra player card e statistiche nelle aree pubbliche.',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _saving ? null : _save,
-                      child: _saving
-                          ? const SizedBox.square(
-                              dimension: 19,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              widget.onboarding
-                                  ? 'Entra in Kickly'
-                                  : 'Salva modifiche',
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _select(
+                            'Ruolo secondario',
+                            _secondary ?? 'none',
+                            {'none': 'Nessuno', ..._roles},
+                            (v) => setState(
+                              () => _secondary = v == 'none' ? null : v,
                             ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _select('Piede preferito', _foot, const {
+                            'right': 'Destro',
+                            'left': 'Sinistro',
+                            'both': 'Entrambi',
+                          }, (v) => setState(() => _foot = v!)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _select('Livello', _skill, const {
+                            'beginner': 'Principiante',
+                            'amateur': 'Amatore',
+                            'competitive': 'Competitivo',
+                          }, (v) => setState(() => _skill = v!)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      child: SwitchListTile(
+                        value: _public,
+                        onChanged: (v) => setState(() => _public = v),
+                        title: const Text(
+                          'Profilo pubblico',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        subtitle: const Text(
+                          'Mostra player card e statistiche nelle aree pubbliche.',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _saving ? null : _save,
+                        child: _saving
+                            ? const SizedBox.square(
+                                dimension: 19,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                widget.onboarding
+                                    ? 'Entra in Kickly'
+                                    : 'Salva modifiche',
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     ),
   );
 
@@ -330,9 +338,18 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
     ValueChanged<String?> onChanged,
   ) => DropdownButtonFormField<String>(
     initialValue: value,
+    // Senza isExpanded il menu si dimensiona sulla voce più lunga e ignora la
+    // colonna che lo contiene: in metà schermo "Centrocampista" sfondava il
+    // campo con l'indicatore di overflow giallo e nero.
+    isExpanded: true,
     decoration: InputDecoration(labelText: label),
     items: values.entries
-        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+        .map(
+          (e) => DropdownMenuItem(
+            value: e.key,
+            child: Text(e.value, overflow: TextOverflow.ellipsis, maxLines: 1),
+          ),
+        )
         .toList(),
     onChanged: onChanged,
   );

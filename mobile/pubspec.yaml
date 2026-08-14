@@ -38,6 +38,17 @@ dependencies:
   intl: 0.20.3
   supabase_flutter: 2.17.1
   url_launcher: 6.3.2
+  # Banner di sistema veri (non SnackBar) e canale notifiche Android brandizzato.
+  flutter_local_notifications: 19.4.2
+  # Task periodico che controlla le notifiche non lette ad app chiusa, così il
+  # telefono avvisa anche senza un canale push FCM/APNs configurato.
+  workmanager: 0.9.0+3
+  # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
+  # che gira in un isolate separato senza accesso allo stato dell'app.
+  shared_preferences: 2.5.5
+  # Geist, lo stesso font della PWA: senza, l'app mobile ripiega su Roboto/SF
+  # ed è il singolo scarto estetico più evidente rispetto al web.
+  google_fonts: 6.3.2
 
 dev_dependencies:
   flutter_test:

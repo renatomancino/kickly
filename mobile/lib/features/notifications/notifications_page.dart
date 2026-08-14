@@ -87,7 +87,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
+                return const ListSkeleton(items: 3);
               }
               if (snapshot.hasError) {
                 return ListView(
@@ -142,7 +142,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 _iconFor(item.type),
                                 color: unread
                                     ? AppTheme.primary
-                                    : Colors.white54,
+                                    : AppTheme.muted,
                               ),
                             ),
                             const SizedBox(width: 13),
@@ -173,7 +173,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   Text(
                                     item.body,
                                     style: const TextStyle(
-                                      color: Colors.white60,
+                                      color: AppTheme.muted,
                                     ),
                                   ),
                                   const SizedBox(height: 8),
@@ -183,7 +183,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                       'it_IT',
                                     ).format(item.createdAt),
                                     style: const TextStyle(
-                                      color: Colors.white38,
+                                      color: AppTheme.mutedSoft,
                                       fontSize: 11,
                                     ),
                                   ),

@@ -114,19 +114,36 @@ class _KicklyBottomBar extends StatelessWidget {
               child: Transform.translate(
                 offset: const Offset(0, -13),
                 child: Center(
-                  child: Material(
-                    color: AppTheme.primary,
-                    borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
+                  child: DecoratedBox(
+                    // Alone verde sotto al pulsante, come lo
+                    // `shadow-[0_10px_28px_-8px_var(--primary)]` della PWA:
+                    // è quello che lo fa sembrare acceso invece di un
+                    // quadrato verde appiccicato sulla barra.
+                    decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
-                      onTap: () => _quickActions(context),
-                      child: const SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: Icon(
-                          Icons.add,
-                          color: AppTheme.background,
-                          size: 27,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primary.withValues(alpha: .45),
+                          blurRadius: 22,
+                          spreadRadius: -6,
+                          offset: const Offset(0, 9),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: AppTheme.primary,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => _quickActions(context),
+                        child: const SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: Icon(
+                            Icons.add,
+                            color: AppTheme.onPrimary,
+                            size: 27,
+                          ),
                         ),
                       ),
                     ),
@@ -155,7 +172,7 @@ class _KicklyBottomBar extends StatelessWidget {
           Icon(
             active ? item.$2 : item.$1,
             size: 21,
-            color: active ? AppTheme.primary : Colors.white54,
+            color: active ? AppTheme.primary : AppTheme.muted,
           ),
           const SizedBox(height: 3),
           Text(
@@ -163,7 +180,7 @@ class _KicklyBottomBar extends StatelessWidget {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: active ? AppTheme.primary : Colors.white54,
+              color: active ? AppTheme.primary : AppTheme.muted,
             ),
           ),
         ],
@@ -189,7 +206,7 @@ class _KicklyBottomBar extends StatelessWidget {
               const SizedBox(height: 4),
               const Text(
                 'Cosa vuoi organizzare?',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(color: AppTheme.muted),
               ),
               const SizedBox(height: 18),
               SizedBox(
