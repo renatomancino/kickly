@@ -5,6 +5,12 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
+/// Soglia di overall oltre la quale il profilo pubblico riceve il
+/// trattamento dorato invece del verde standard. Stesso valore di
+/// `profile_page.dart`: le due card (privata e pubblica) devono considerare
+/// "elite" lo stesso giocatore, non due soglie diverse.
+const _eliteOverallThreshold = 85;
+
 class PlayerProfilePage extends StatefulWidget {
   const PlayerProfilePage({super.key, required this.username});
   final String username;
@@ -41,17 +47,29 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
           );
         }
         final profile = data.profile, stats = data.stats;
+        // Stessa soglia "elite" della player card privata (profile_page.dart):
+        // sopra gli 85 di overall il profilo pubblico riceve lo stesso
+        // trattamento dorato, cosi un profilo forte si riconosce a colpo
+        // d'occhio anche quando lo si guarda da fuori, non solo dal proprio.
+        final elite = stats.overall >= _eliteOverallThreshold;
+        final accent = elite ? AppTheme.gold : AppTheme.primary;
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
             Card(
+              shape: elite
+                  ? RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      side: const BorderSide(color: AppTheme.gold, width: 1.3),
+                    )
+                  : null,
               child: Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(22),
                   gradient: LinearGradient(
                     colors: [
-                      AppTheme.primary.withValues(alpha: .14),
+                      accent.withValues(alpha: elite ? .22 : .14),
                       Colors.transparent,
                     ],
                     begin: Alignment.topRight,
@@ -60,10 +78,24 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
                 ),
                 child: Column(
                   children: [
-                    PlayerAvatar(
-                      name: profile.displayName,
-                      url: profile.avatarUrl,
-                      radius: 48,
+                    // Anello colorato attorno all'avatar, stesso trattamento
+                    // della card privata: qui l'avatar e piu grande (radius
+                    // 48 contro 27) quindi il bordo e leggermente piu spesso
+                    // per restare in proporzione.
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: accent.withValues(alpha: .55),
+                          width: elite ? 3 : 2.5,
+                        ),
+                      ),
+                      child: PlayerAvatar(
+                        name: profile.displayName,
+                        url: profile.avatarUrl,
+                        radius: 48,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     Text(
@@ -74,13 +106,62 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
                       '@${profile.username}',
                       style: const TextStyle(color: AppTheme.muted),
                     ),
+                    // Citta, terzo livello della gerarchia (nome > username >
+                    // citta): dato gia raccolto in fase di onboarding ma
+                    // prima mai mostrato sul profilo pubblico.
+                    if (profile.city != null &&
+                        profile.city!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 13,
+                            color: AppTheme.mutedSoft,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            profile.city!,
+                            style: const TextStyle(
+                              color: AppTheme.mutedSoft,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
                       children: [
                         Chip(label: Text(_role(profile.primaryPosition))),
+                        // Piede preferito: prima assente dal profilo
+                        // pubblico pur essendo un dato gia disponibile.
+                        if (_foot(profile.preferredFoot) case final label?)
+                          Chip(label: Text(label)),
                         Chip(label: Text(_level(profile.skillLevel))),
-                        Chip(label: Text('OVR ${stats.overall}')),
+                        // Il chip dell'overall e l'unico che riceve il
+                        // trattamento dorato: e il numero che la soglia
+                        // "elite" descrive, gli altri badge restano neutri.
+                        Chip(
+                          label: Text('OVR ${stats.overall}'),
+                          backgroundColor: elite
+                              ? AppTheme.gold.withValues(alpha: .16)
+                              : null,
+                          side: elite
+                              ? const BorderSide(color: AppTheme.gold)
+                              : null,
+                          labelStyle: elite
+                              ? const TextStyle(
+                                  color: AppTheme.gold,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                )
+                              : null,
+                        ),
                       ],
                     ),
                   ],
@@ -208,4 +289,13 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
         'competitive': 'Competitivo',
       }[value] ??
       'Amatore';
+
+  // A differenza di _role/_level non ha un valore di default: se il piede
+  // preferito non e stato impostato il chip semplicemente non compare,
+  // invece di mostrare un'informazione inventata su un profilo altrui.
+  String? _foot(String? value) => const {
+    'right': 'Destro',
+    'left': 'Sinistro',
+    'both': 'Entrambi',
+  }[value];
 }

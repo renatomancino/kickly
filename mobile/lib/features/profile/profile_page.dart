@@ -85,7 +85,16 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: _IdentityCard(profile: profile)),
+                    // L'overall passa anche alla card identita: le due tessere
+                    // devono cambiare "livello" insieme, altrimenti l'accento
+                    // dorato sbucherebbe solo su una delle due meta della
+                    // testata e sembrerebbe un errore piuttosto che una scelta.
+                    Expanded(
+                      child: _IdentityCard(
+                        profile: profile,
+                        overall: stats.overall,
+                      ),
+                    ),
                     const SizedBox(width: 12),
                     _OverallCard(overall: stats.overall),
                   ],
@@ -165,24 +174,43 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
-/// Blocco identita: avatar, nome, username e ruolo preferito.
+/// Blocco identita: avatar, nome, username, citta e badge del giocatore.
 class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.profile});
+  const _IdentityCard({required this.profile, required this.overall});
 
   final UserProfile profile;
+  final int overall;
 
   @override
   Widget build(BuildContext context) {
+    // Sopra la soglia "elite" la card passa dal verde del marchio all'oro
+    // gia usato per fascia da capitano e trofei: e lo stesso principio delle
+    // card FIFA/FUT (le carte piu forti hanno una rifinitura diversa), reso
+    // pero con un solo scatto invece di una scala a piu colori, cosi resta
+    // leggibile come "eccellenza" e non come un semaforo di livelli.
+    final elite = overall >= _eliteOverallThreshold;
+    final accent = elite ? AppTheme.gold : AppTheme.primary;
     return Card(
+      // Il bordo dorato si applica solo alle card elite: per tutte le altre
+      // lasciamo lo shape di default del tema (bordo verde tenue), cosi il
+      // trattamento "normale" resta identico a prima e non cambia look a chi
+      // non supera la soglia.
+      shape: elite
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              side: const BorderSide(color: AppTheme.gold, width: 1.3),
+            )
+          : null,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          // Velatura verde appena accennata: stacca l'intestazione dal resto
-          // della pagina senza introdurre un colore nuovo.
+          // Velatura di colore appena accennata (piu marcata per le card
+          // elite): stacca l'intestazione dal resto della pagina senza
+          // introdurre un colore nuovo rispetto al resto del tema.
           gradient: LinearGradient(
             colors: [
-              AppTheme.primary.withValues(alpha: .1),
+              accent.withValues(alpha: elite ? .2 : .1),
               Colors.transparent,
             ],
             begin: Alignment.topLeft,
@@ -193,7 +221,7 @@ class _IdentityCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Anello verde attorno all'avatar: sulla card velata di verde il
+            // Anello attorno all'avatar: sulla card velata di colore il
             // cerchio da solo aveva troppo poco contrasto e si confondeva col
             // fondo.
             Container(
@@ -201,8 +229,8 @@ class _IdentityCard extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppTheme.primary.withValues(alpha: .55),
-                  width: 2,
+                  color: accent.withValues(alpha: .55),
+                  width: elite ? 2.5 : 2,
                 ),
               ),
               child: PlayerAvatar(
@@ -212,6 +240,11 @@ class _IdentityCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+            // Gerarchia tipografica esplicita: il nome e il titolo della
+            // card (titleLarge, gia in grassetto pesante dal tema), lo
+            // username e un metadato secondario, la citta un terzo livello
+            // ancora piu discreto. Prima citta non compariva affatto qui
+            // pur essendo un dato gia raccolto in fase di onboarding.
             Text(
               profile.displayName,
               maxLines: 2,
@@ -225,24 +258,91 @@ class _IdentityCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: AppTheme.muted, fontSize: 13),
             ),
+            if (profile.city != null && profile.city!.trim().isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 13,
+                    color: AppTheme.mutedSoft,
+                  ),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      profile.city!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.mutedSoft,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceHigh,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppTheme.outline),
-              ),
-              child: Text(
-                _roleLabel(profile.primaryPosition),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+            // Badge del ruolo, piede preferito e livello: dati gia raccolti
+            // nell'editor ma prima assenti dalla card principale, dove
+            // l'utente li vede senza dover aprire "Modifica profilo". Un
+            // Wrap invece di una Row fissa cosi non serve gestire l'overflow
+            // quando compaiono tutti e tre insieme su schermi stretti.
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _InfoPill(label: _roleLabel(profile.primaryPosition)),
+                if (_footLabel(profile.preferredFoot) case final label?)
+                  _InfoPill(label: label, icon: Icons.sports_soccer),
+                if (_skillLabel(profile.skillLevel) case final label?)
+                  _InfoPill(label: label, icon: Icons.military_tech_outlined),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Soglia di overall oltre la quale la card riceve il trattamento "elite"
+/// (bordo/gradiente dorato al posto del verde standard). 85 e volutamente
+/// alto: deve restare un traguardo raro, non qualcosa che quasi tutti
+/// raggiungono subito.
+const _eliteOverallThreshold = 85;
+
+/// Badge coerente col resto della card (stessa pillola usata per il ruolo,
+/// non il `Chip` di Material) per non introdurre un secondo linguaggio
+/// visivo nella stessa tessera.
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.label, this.icon});
+
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.outline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: AppTheme.muted),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }
@@ -256,14 +356,33 @@ class _OverallCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Stessa soglia della card identita: le due tessere della testata devono
+    // "scattare" di livello insieme, non una si e una no.
+    final elite = overall >= _eliteOverallThreshold;
     return SizedBox(
       width: 108,
       child: Card(
-        color: AppTheme.primary,
+        // Tinta unita per il caso normale (invariato), nessun colore quando
+        // e la card elite: li il colore arriva dal gradiente sotto, messo su
+        // un Container invece che sul Card perche CardThemeData non supporta
+        // un gradiente come `color`.
+        color: elite ? null : AppTheme.primary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         ),
-        child: Padding(
+        child: Container(
+          decoration: elite
+              ? const BoxDecoration(
+                  // Oro verso verde: richiama la fascia da capitano ma
+                  // resta ancorato al colore del marchio, cosi non sembra un
+                  // badge scollegato dal resto dell'app.
+                  gradient: LinearGradient(
+                    colors: [AppTheme.gold, AppTheme.primary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                )
+              : null,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -724,4 +843,24 @@ String _roleLabel(String? role) => switch (role) {
   'midfielder' => 'Centrocampista',
   'forward' => 'Attaccante',
   _ => 'Giocatore',
+};
+
+/// Stesse etichette di `profile_editor_page.dart`, cosi il piede indicato
+/// qui e quello scelto in fase di modifica coincidono sempre alla lettera.
+/// Torna `null` (invece di un valore di default) quando il dato manca:
+/// a differenza del ruolo, non ha senso mostrare un piede "inventato".
+String? _footLabel(String? foot) => switch (foot) {
+  'right' => 'Destro',
+  'left' => 'Sinistro',
+  'both' => 'Entrambi',
+  _ => null,
+};
+
+/// Idem per il livello: stesse tre voci dell'editor, nessun default quando
+/// il valore non e ancora stato impostato.
+String? _skillLabel(String? level) => switch (level) {
+  'beginner' => 'Principiante',
+  'amateur' => 'Amatore',
+  'competitive' => 'Competitivo',
+  _ => null,
 };
