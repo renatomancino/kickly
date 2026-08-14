@@ -90,8 +90,22 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
           _DeleteLeagueDialog(expectedName: league.summary.name),
     );
     if (accepted != true || !mounted) return;
-    await AppScope.of(context).repository.deleteLeague(league.summary.id);
-    if (mounted) context.go('/leagues');
+    // Stesso flag `saving` di save(): eliminare o salvare non possono mai
+    // essere in corso insieme, quindi condividerlo disabilita anche
+    // "Salva modifiche" mentre la cancellazione è in volo, invece di
+    // lasciare due azioni concorrenti sulla stessa lega.
+    setState(() => saving = true);
+    try {
+      await AppScope.of(context).repository.deleteLeague(league.summary.id);
+      if (mounted) context.go('/leagues');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
 
   @override
@@ -102,6 +116,27 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const ListSkeleton(items: 2);
+        }
+        // Prima il ramo errore, poi "accesso negato": senza questo, un
+        // fallimento di rete cadeva nello stesso `league == null` di un
+        // admin senza permessi, mostrando "Accesso negato" a un owner
+        // legittimo semplicemente perché la richiesta non era arrivata.
+        if (snapshot.hasError) {
+          return PageFrame(
+            child: EmptyState(
+              icon: Icons.cloud_off,
+              title: 'Impostazioni non disponibili',
+              body: friendlyError(snapshot.error ?? 'Errore'),
+              action: FilledButton(
+                onPressed: () => setState(
+                  () => future = AppScope.of(context).repository.getLeague(
+                    widget.slug,
+                  ),
+                ),
+                child: const Text('Riprova'),
+              ),
+            ),
+          );
         }
         final league = snapshot.data;
         if (league == null || !league.summary.canManage) {
@@ -294,7 +329,7 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,
                   ),
-                  onPressed: () => delete(league),
+                  onPressed: saving ? null : () => delete(league),
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Elimina lega'),
                 ),

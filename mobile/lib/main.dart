@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
+import 'core/network/timeout_http_client.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/security/secure_session_storage.dart';
 import 'data/kickly_repository.dart';
@@ -25,6 +27,10 @@ Future<void> main() async {
     await Supabase.initialize(
       url: config.supabaseUrl,
       publishableKey: config.supabasePublishableKey,
+      // Senza un httpClient esplicito, una richiesta su rete assente o
+      // capitiva non ha mai un timeout: lo spinner resterebbe a girare
+      // indefinitamente invece di fallire in un tempo ragionevole.
+      httpClient: TimeoutHttpClient(http.Client()),
       authOptions: FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
         // Access e refresh token in Keychain/Keystore invece che in

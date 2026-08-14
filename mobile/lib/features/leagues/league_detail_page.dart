@@ -613,6 +613,33 @@ class _MembersList extends StatelessWidget {
     LeagueMember member,
     String action,
   ) async {
+    // "Trasferisci proprietà" era l'unica voce del menu senza conferma
+    // (Lascia/Elimina lega ce l'hanno): un tap accidentale sul menu
+    // trasferiva la proprietà della lega in modo irreversibile con un
+    // solo tocco.
+    if (action == 'owner') {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Trasferire la proprietà?'),
+          content: Text(
+            '${member.displayName} diventerà il nuovo proprietario della lega. '
+            'Non potrai annullare questa azione da qui.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Trasferisci'),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !context.mounted) return;
+    }
     final repository = AppScope.of(context).repository;
     try {
       if (action == 'role') {
@@ -1098,8 +1125,15 @@ class _LeagueInfo extends StatelessWidget {
       ),
     );
     if (accepted != true || !context.mounted) return;
-    await AppScope.of(context).repository.leaveLeague(detail.summary.id);
-    if (context.mounted) context.go('/leagues');
+    try {
+      await AppScope.of(context).repository.leaveLeague(detail.summary.id);
+      if (context.mounted) context.go('/leagues');
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    }
   }
 }
 

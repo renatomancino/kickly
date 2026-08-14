@@ -411,7 +411,14 @@ class _DetailsTab extends StatelessWidget {
     final perPlayer = match.costTotal == null || summary.maxPlayers == 0
         ? null
         : match.costTotal! / summary.maxPlayers;
-    final isOpen = summary.status == 'open' || summary.status == 'full';
+    // registrationClosedAt e' impostato da set_match_admin_state('close', ...)
+    // senza toccare `status`: senza questo controllo i bottoni RSVP
+    // restavano visibili e cliccabili anche a iscrizioni chiuse, e
+    // set_match_response rifiutava con un errore generico invece di
+    // spiegare perche'.
+    final isOpen =
+        (summary.status == 'open' || summary.status == 'full') &&
+        summary.registrationClosedAt == null;
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -638,6 +645,29 @@ class _DetailsTab extends StatelessWidget {
               padding: EdgeInsets.only(top: 10),
               child: LinearProgressIndicator(),
             ),
+          const SizedBox(height: 24),
+        ] else if (summary.isLeagueMember &&
+            summary.registrationClosedAt != null &&
+            (summary.status == 'open' || summary.status == 'full')) ...[
+          // Spiega perche' i bottoni di conferma presenza non ci sono,
+          // invece di lasciare un vuoto silenzioso dove prima c'erano.
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_clock_outlined, color: AppTheme.muted),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Le iscrizioni a questa partita sono chiuse: non puoi più cambiare la tua presenza.',
+                      style: TextStyle(color: AppTheme.muted, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
         ],
         if (match.venuePhone?.isNotEmpty == true) ...[

@@ -687,6 +687,69 @@ String friendlyError(Object error) {
     return 'Sessione scaduta: accedi di nuovo.';
   }
 
+  // Chiusura partita: codici sollevati da finalize_match. Prima di questi
+  // fix ogni errore qui cadeva nel messaggio generico in fondo, il momento
+  // peggiore per un admin che sta chiudendo una partita a mano.
+  if (text.contains('team_a_goals_mismatch') ||
+      text.contains('team_b_goals_mismatch')) {
+    return 'I gol assegnati ai giocatori non corrispondono al punteggio della squadra. Controlla i gol inseriti.';
+  }
+  if (text.contains('invalid_player_totals')) {
+    return 'I gol o gli assist inseriti per un giocatore non sono validi.';
+  }
+  if (text.contains('player_totals_required')) {
+    return 'Inserisci gol e assist per tutti i giocatori confermati.';
+  }
+  if (text.contains('duplicate_team_player')) {
+    return 'Un giocatore risulta in entrambe le squadre: controlla la formazione.';
+  }
+  if (text.contains('teams_required')) {
+    return 'Assegna tutti i giocatori confermati a una squadra prima di chiudere la partita.';
+  }
+  if (text.contains('all_confirmed_players_required')) {
+    return 'Mancano dei giocatori confermati nelle squadre.';
+  }
+  if (text.contains('team_match_mismatch')) {
+    return 'Questa squadra non appartiene a questa partita.';
+  }
+  if (text.contains('invalid_score')) {
+    return 'Il punteggio inserito non è valido.';
+  }
+
+  // Iscrizioni e capienza: set_match_admin_state, set_match_response,
+  // create_match/update_match.
+  if (text.contains('registrations_closed')) {
+    return 'Le iscrizioni a questa partita sono chiuse.';
+  }
+  if (text.contains('max_below_confirmed')) {
+    return 'Non puoi impostare un numero massimo di giocatori inferiore alle presenze già confermate.';
+  }
+
+  // Votazione MVP: cast_mvp_vote, finalize_match_mvp.
+  if (text.contains('mvp_voting_closed')) {
+    return 'La votazione per l’MVP è chiusa.';
+  }
+  if (text.contains('mvp_voting_open')) {
+    return 'La votazione per l’MVP è ancora aperta.';
+  }
+  if (text.contains('cannot_vote_self')) {
+    return 'Non puoi votare te stesso come MVP.';
+  }
+  if (text.contains('invalid_mvp_candidate')) {
+    return 'Questo giocatore non può essere votato come MVP.';
+  }
+  if (text.contains('no_mvp_candidates')) {
+    return 'Nessun voto ricevuto: non è stato possibile eleggere un MVP.';
+  }
+
+  // Permessi generici sulle RPC di gestione partita/lega.
+  if (text.contains('admin_required')) {
+    return 'Solo un admin della lega può eseguire questa azione.';
+  }
+  if (text.contains('membership_required')) {
+    return 'Devi essere membro della lega per eseguire questa azione.';
+  }
+
   // Volutamente in fondo: 'username' è una parola comune e prima intercettava
   // errori che non avevano nulla a che fare con la registrazione.
   if (text.contains('username')) return 'Questo username non è disponibile.';

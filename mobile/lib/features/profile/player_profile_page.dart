@@ -35,6 +35,26 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const ListSkeleton(items: 2);
         }
+        // Ramo errore separato da "profilo assente": senza, un fallimento
+        // di rete cadeva nello stesso `data == null` di un profilo privato
+        // o inesistente, dicendo all'utente qualcosa di sbagliato invece
+        // che "riprova".
+        if (snapshot.hasError) {
+          return PageFrame(
+            child: EmptyState(
+              icon: Icons.cloud_off,
+              title: 'Profilo non disponibile',
+              body: friendlyError(snapshot.error ?? 'Errore'),
+              action: FilledButton(
+                onPressed: () => setState(
+                  () => future = AppScope.of(context).repository
+                      .getPublicProfile(widget.username),
+                ),
+                child: const Text('Riprova'),
+              ),
+            ),
+          );
+        }
         final data = snapshot.data;
         if (data == null) {
           return const PageFrame(

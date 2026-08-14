@@ -122,6 +122,26 @@ class _MatchResultPageState extends State<MatchResultPage> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const ListSkeleton(items: 2);
         }
+        // Ramo errore separato da "partita non trovata": un fallimento di
+        // rete non è la stessa cosa di una partita cancellata/inesistente,
+        // e qui merita un "riprova" invece di un vicolo cieco.
+        if (snapshot.hasError) {
+          return PageFrame(
+            child: EmptyState(
+              icon: Icons.cloud_off,
+              title: 'Risultato non disponibile',
+              body: friendlyError(snapshot.error ?? 'Errore'),
+              action: FilledButton(
+                onPressed: () => setState(
+                  () => _future = AppScope.of(
+                    context,
+                  ).repository.getMatch(widget.matchId),
+                ),
+                child: const Text('Riprova'),
+              ),
+            ),
+          );
+        }
         final match = snapshot.data;
         if (match == null) {
           return const PageFrame(

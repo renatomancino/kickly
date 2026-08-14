@@ -68,8 +68,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   Future<void> _open(KicklyNotification notification) async {
     if (notification.readAt == null) {
-      await AppScope.of(context).repository
-          .markNotificationRead(notification.id);
+      try {
+        await AppScope.of(context).repository
+            .markNotificationRead(notification.id);
+      } catch (_) {
+        // Segnare come letta è un dettaglio: se fallisce (rete assente)
+        // l'utente deve poter aprire comunque la notifica invece di
+        // restare bloccato su un tap che sembra non fare nulla.
+      }
     }
     if (!mounted) return;
     final link = notification.link;
@@ -81,8 +87,15 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _markAll() async {
-    await AppScope.of(context).repository.markAllNotificationsRead();
-    if (mounted) await _reload();
+    try {
+      await AppScope.of(context).repository.markAllNotificationsRead();
+      if (mounted) await _reload();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    }
   }
 
   @override
