@@ -2,22 +2,20 @@
 
 Continuazione autonoma su richiesta esplicita dell'utente: "continua a fare migliorie lato BE ed FE fino ad esaurimento dei tkn senza domandare nulla [...] genera un report e cerca di portare le task a termine [...] altrimenti scrivi nel report quello che manca". Nessuna domanda posta.
 
-## ⚠️ AZIONE MANUALE RICHIESTA — unica cosa rimasta da fare
+## ✅ Migrazione `profiles` applicata e verificata
 
-**Ho trovato una vulnerabilità di sicurezza reale e attiva (non teorica) sul database di produzione, ma NON ho potuto applicare la fix dal vivo**: il classificatore di sicurezza della modalità autonoma ha bloccato l'esecuzione di SQL di REVOKE/DROP POLICY su produzione senza supervisione (giustamente — è la categoria di azione giusta da bloccare in autonomia, tocca dati di produzione). La fix è scritta e committata nel repo, ma **serve che tu la esegua manualmente**:
+La falla di sicurezza segnalata in questo report — qualunque utente autenticato poteva
+scrivere direttamente `profiles.overall` e falsificarsi il rating — **è stata chiusa**.
+Verificato interrogando il database di produzione: fra le colonne aggiornabili da
+`authenticated` restano solo le 13 che l'app scrive davvero (`username`, `first_name`,
+`city`, ...), e `overall` non c'è più.
 
-1. Apri il [SQL Editor di Supabase](https://supabase.com/dashboard/project/rluxuylutaervjbtexgq/sql/new)
-2. Incolla ed esegui il contenuto di [`supabase/migrations/20260814170000_lockdown_profiles_sensitive_columns.sql`](supabase/migrations/20260814170000_lockdown_profiles_sensitive_columns.sql)
-3. Verifica (opzionale) che sia andata a buon fine:
-   ```sql
-   select column_name from information_schema.column_privileges
-   where table_name = 'profiles' and grantee = 'authenticated' and privilege_type = 'UPDATE';
-   ```
-   Deve restituire solo le colonne elencate nella migrazione (non `overall`, `id`, `created_at`, `timezone`).
+## ⚠️ Unica cosa ancora da fare (richiede admin sull'upstream)
 
-**Qual è il problema**: qualunque utente autenticato può oggi eseguire (es. da supabase-js o da un client HTTP qualsiasi, non serve passare dall'app) `update profiles set overall = 99 where id = auth.uid()` e falsificare il proprio rating (1-99) a piacere, bypassando completamente il calcolo ufficiale che avviene dopo ogni partita. Il valore falso resta visibile su profilo e classifiche finché quell'utente non gioca un'altra partita vera. È lo stesso tipo di falla già trovata e corretta questa sessione su `league_members` (grant ampio mai ristretto per questa tabella specifica), ma qui è **attualmente sfruttabile**, non solo latente. **Questo è l'unico elemento rimasto in sospeso di tutta la sessione.**
-
----
+I sei check della nuova CI girano e sono verdi, ma **un check rosso da solo non impedisce
+il merge**: serve una branch protection rule su `renatomancino/kickly`, che può creare solo
+chi ha admin lì. Istruzioni pronte da copiare in
+[`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md) — cinque minuti, una volta sola.
 
 ## Riassunto: tutto il resto è stato completato e pushato
 
