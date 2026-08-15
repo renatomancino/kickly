@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 // `Uint8List` arriva già da qui: `dart:typed_data` diretto non serve più
 // e l'analyzer lo segnala come import ridondante.
@@ -133,7 +135,9 @@ class _MatchFormPageState extends State<MatchFormPage> {
     }
     // Piccolo riscontro tattile alla conferma di un form importante come
     // questo (crea o modifica una partita), non su ogni tap generico.
-    HapticFeedback.lightImpact();
+    // `unawaited`: è un effetto collaterale sul motore aptico, attenderlo
+    // ritarderebbe geocoding e salvataggio senza alcun beneficio.
+    unawaited(HapticFeedback.lightImpact());
     setState(() {
       _loading = true;
       _error = null;

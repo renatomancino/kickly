@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -1106,7 +1108,9 @@ class _LeagueInfo extends StatelessWidget {
     // Feedback aptico prima del dialog, non dopo il tap su "Lascia": è
     // un'azione distruttiva e qui, non nel bottone del dialog, sta il primo
     // momento in cui l'utente segnala l'intenzione di uscire dalla lega.
-    HapticFeedback.mediumImpact();
+    // `unawaited`: la vibrazione deve partire *insieme* al dialog, non prima,
+    // altrimenti l'apertura della conferma aspetterebbe il motore aptico.
+    unawaited(HapticFeedback.mediumImpact());
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(

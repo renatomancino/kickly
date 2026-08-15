@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -64,7 +66,9 @@ class _JoinLeaguePageState extends State<JoinLeaguePage> {
   Future<void> _join() async {
     // Riscontro tattile alla conferma: entrare in una lega è un cambio di
     // stato per l'utente (diventa membro), non un tap di navigazione qualsiasi.
-    HapticFeedback.lightImpact();
+    // `unawaited`: la vibrazione è un effetto collaterale sul motore aptico,
+    // attenderla ritarderebbe la richiesta di rete senza alcun beneficio.
+    unawaited(HapticFeedback.lightImpact());
     setState(() => _loading = true);
     try {
       final slug = await AppScope.of(context).repository.joinLeague(_code.text);

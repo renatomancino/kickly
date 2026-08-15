@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -80,7 +82,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!mounted) return;
     final link = notification.link;
     if (link != null && link.startsWith('/')) {
-      context.push(link);
+      // `push` restituisce una Future che si completa solo quando l'utente
+      // torna indietro dalla pagina di destinazione: attenderla terrebbe
+      // `_open` appesa per tutta la visita. Qui la navigazione è l'ultimo
+      // passo del metodo, quindi è un fire-and-forget voluto.
+      unawaited(context.push(link));
     } else {
       await _reload();
     }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 // `Uint8List` arriva già da qui: `dart:typed_data` diretto non serve più
 // e l'analyzer lo segnala come import ridondante.
@@ -67,7 +69,9 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
     if (!_formKey.currentState!.validate()) return;
     // Riscontro tattile alla conferma di un form importante come la
     // creazione di una lega, non su ogni tap generico del modulo.
-    HapticFeedback.lightImpact();
+    // `unawaited`: è un effetto collaterale sul motore aptico, attenderlo
+    // ritarderebbe l'invio del form senza alcun beneficio.
+    unawaited(HapticFeedback.lightImpact());
     setState(() {
       _loading = true;
       _error = null;

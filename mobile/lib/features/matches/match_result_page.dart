@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -84,7 +86,9 @@ class _MatchResultPageState extends State<MatchResultPage> {
     // Riscontro tattile alla conferma: chiudere la partita pubblica il
     // risultato finale a tutti i partecipanti, un momento che merita un
     // piccolo feedback fisico come la pubblicazione di una nuova partita.
-    HapticFeedback.lightImpact();
+    // `unawaited`: è un effetto collaterale sul motore aptico, attenderlo
+    // ritarderebbe la chiusura della partita senza alcun beneficio.
+    unawaited(HapticFeedback.lightImpact());
     setState(() => _saving = true);
     try {
       await AppScope.of(context).repository.finalizeMatch(

@@ -30,9 +30,61 @@ linter:
   # or a specific dart file by using the `// ignore: name_of_lint` and
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
+  #
+  # ---------------------------------------------------------------------------
+  # Regole aggiunte a mano (irrigidimento graduale, agosto 2026)
+  # ---------------------------------------------------------------------------
+  # Criterio di selezione: qui stanno SOLO regole che intercettano bug o rischi
+  # veri. Le regole di puro stile ad alto churn (prefer_const_constructors,
+  # require_trailing_commas, always_specify_types, sort_constructors_first,
+  # public_member_api_docs...) sono state deliberatamente escluse: avrebbero
+  # prodotto centinaia di modifiche cosmetiche senza prevenire un solo crash.
+  #
+  # NOTA IMPORTANTE sul limite di questo set. L'audit manuale di agosto 2026 ha
+  # trovato 12 bug della classe "await, poi setState/BuildContext su widget
+  # ormai smontato". Di quella classe l'analyzer copre solo META':
+  #   - il ramo BuildContext dopo await -> lo prende `use_build_context_
+  #     synchronously`, GIA' attivo tramite flutter_lints (non serve
+  #     riaggiungerlo qui);
+  #   - il ramo `setState` dopo await senza `if (mounted)` -> NON esiste alcuna
+  #     lint di prima parte che lo intercetti (verificato: nomi come
+  #     `use_setstate_synchronously` non sono regole riconosciute).
+  # Quindi `if (mounted)` prima di ogni setState che segue un await resta una
+  # disciplina da tenere a mano in review: l'analyzer non la impone.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # Una Future non attesa è un bug silenzioso: l'errore che contiene non
+    # finisce in nessun try/catch e l'ordine delle operazioni non è più quello
+    # che si legge nel codice. In un'app che fa quasi solo I/O di rete
+    # (Supabase) è la regola con il rapporto valore/rumore più alto. Dove il
+    # fire-and-forget è voluto va reso esplicito con `unawaited(...)`, così la
+    # scelta è visibile a chi legge invece di sembrare una dimenticanza.
+    - unawaited_futures
+
+    # AppState ascolta `authStateChanges` e il canale realtime delle notifiche:
+    # una subscription non cancellata in dispose() continua a girare e a
+    # chiamare notifyListeners() su un oggetto morto (leak + crash).
+    - cancel_subscriptions
+    - close_sinks
+
+    # Il repository mappa molto JSON (`Map<String, dynamic>`): su un target
+    # `dynamic` l'analyzer non verifica più nulla e un campo rinominato lato
+    # Supabase diventa un NoSuchMethodError a runtime invece di un errore di
+    # compilazione. Il codice attuale passa già tutto da cast espliciti e da
+    # helper tipizzati (`asInt`, `?.toString()`): la regola costa zero oggi e
+    # impedisce di reintrodurre l'accesso non tipizzato domani.
+    - avoid_dynamic_calls
+
+    # Le varianti async di File.exists/stat sono più lente delle sincrone:
+    # rilevante sui percorsi che toccano il filesystem (cache immagini, foto
+    # scelte dall'utente).
+    - avoid_slow_async_io
+
+    # Due stringhe adiacenti in una lista vengono concatenate silenziosamente:
+    # quasi sempre è una virgola dimenticata, non l'intenzione.
+    - no_adjacent_strings_in_list
+
+    # `Null` come tipo di ritorno è quasi sempre un `void` scritto male.
+    - prefer_void_to_null
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
