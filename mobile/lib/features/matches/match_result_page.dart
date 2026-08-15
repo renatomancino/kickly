@@ -137,9 +137,9 @@ class _MatchResultPageState extends State<MatchResultPage> {
               body: friendlyError(snapshot.error ?? 'Errore'),
               action: FilledButton(
                 onPressed: () => setState(
-                  () => _future = AppScope.of(
-                    context,
-                  ).repository.getMatch(widget.matchId),
+                  () =>
+                      _future = AppScope.of(context).repository
+                          .getMatch(widget.matchId),
                 ),
                 child: const Text('Riprova'),
               ),

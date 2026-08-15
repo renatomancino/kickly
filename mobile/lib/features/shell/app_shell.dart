@@ -237,7 +237,6 @@ class _KicklyBottomBar extends StatelessWidget {
     );
   }
 
-
   Widget _item((IconData, IconData, String) item, int index, bool active) {
     return InkWell(
       borderRadius: BorderRadius.circular(999),

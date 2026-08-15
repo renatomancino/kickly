@@ -109,7 +109,11 @@ class NotificationService {
           IOSFlutterLocalNotificationsPlugin
         >();
     if (ios != null) {
-      return await ios.requestPermissions(alert: true, badge: true, sound: true) ??
+      return await ios.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
           false;
     }
     return false;
@@ -207,8 +211,7 @@ class NotificationService {
 ///
 /// Android richiede un int: usando sempre lo stesso id per la stessa notifica
 /// il sistema la sostituisce invece di impilarne due copie.
-int notificationIdOf(String uuid) =>
-    uuid.hashCode & 0x7fffffff;
+int notificationIdOf(String uuid) => uuid.hashCode & 0x7fffffff;
 
 /// Gestore del tap su notifica quando l'app non è in esecuzione.
 ///

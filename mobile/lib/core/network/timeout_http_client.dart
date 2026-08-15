@@ -11,10 +11,7 @@ import 'package:http/http.dart' as http;
 /// qualunque eccezione non riconosciuta, incluso `TimeoutException`: qui
 /// serve solo garantire che quell'eccezione arrivi in un tempo ragionevole.
 class TimeoutHttpClient extends http.BaseClient {
-  TimeoutHttpClient(
-    this._inner, {
-    this.timeout = const Duration(seconds: 15),
-  });
+  TimeoutHttpClient(this._inner, {this.timeout = const Duration(seconds: 15)});
 
   final http.Client _inner;
   final Duration timeout;

@@ -27,8 +27,7 @@ List<String> formationsFor(String format) =>
 /// Numero di giocatori per squadra, portiere incluso: '7v7' -> 7.
 ///
 /// Rispecchia `private.lineup_side_size`.
-int lineupSideSize(String format) =>
-    int.tryParse(format.split('v').first) ?? 5;
+int lineupSideSize(String format) => int.tryParse(format.split('v').first) ?? 5;
 
 /// Modulo di default di un formato, cioè quello che il database assegna alla
 /// creazione della partita.
@@ -92,9 +91,9 @@ List<LineupSlot> buildLineupSlots(String format, String? formation) {
     3 => const [.72, .50, .27],
     1 => const [.50],
     _ => List.generate(
-        lines.length,
-        (index) => .72 - index * (.45 / (lines.length - 1)),
-      ),
+      lines.length,
+      (index) => .72 - index * (.45 / (lines.length - 1)),
+    ),
   };
 
   final slots = <LineupSlot>[

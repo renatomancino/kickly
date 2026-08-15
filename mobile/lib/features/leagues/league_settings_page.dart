@@ -129,9 +129,9 @@ class _LeagueSettingsPageState extends State<LeagueSettingsPage> {
               body: friendlyError(snapshot.error ?? 'Errore'),
               action: FilledButton(
                 onPressed: () => setState(
-                  () => future = AppScope.of(context).repository.getLeague(
-                    widget.slug,
-                  ),
+                  () =>
+                      future = AppScope.of(context).repository
+                          .getLeague(widget.slug),
                 ),
                 child: const Text('Riprova'),
               ),
@@ -407,10 +407,8 @@ class _DeleteLeagueDialogState extends State<_DeleteLeagueDialog> {
         child: const Text('Annulla'),
       ),
       FilledButton(
-        onPressed: () => Navigator.pop(
-          context,
-          _confirmation.text == widget.expectedName,
-        ),
+        onPressed: () =>
+            Navigator.pop(context, _confirmation.text == widget.expectedName),
         child: const Text('Elimina'),
       ),
     ],

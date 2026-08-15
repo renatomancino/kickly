@@ -191,7 +191,10 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.fromBorderSide(
-                            BorderSide(color: AppTheme.outlineSolid, width: 1.5),
+                            BorderSide(
+                              color: AppTheme.outlineSolid,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                         child: CircleAvatar(

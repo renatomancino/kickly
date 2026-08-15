@@ -538,7 +538,11 @@ class _HeroMatch extends StatelessWidget {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    const Icon(Icons.schedule, color: AppTheme.primary, size: 18),
+                    const Icon(
+                      Icons.schedule,
+                      color: AppTheme.primary,
+                      size: 18,
+                    ),
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
@@ -593,7 +597,10 @@ class _HeroMatch extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       LinearProgressIndicator(
-                        value: (match.goingCount / match.maxPlayers).clamp(0, 1),
+                        value: (match.goingCount / match.maxPlayers).clamp(
+                          0,
+                          1,
+                        ),
                         minHeight: 6,
                         borderRadius: BorderRadius.circular(99),
                       ),
