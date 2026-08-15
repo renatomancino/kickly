@@ -333,14 +333,11 @@ class _HeroHeader extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        ProfileInfoPill(label: roleLabel(profile.primaryPosition)),
+                        InfoPill(label: roleLabel(profile.primaryPosition)),
                         if (footLabel(profile.preferredFoot) case final label?)
-                          ProfileInfoPill(
-                            label: label,
-                            icon: Icons.sports_soccer,
-                          ),
+                          InfoPill(label: label, icon: Icons.sports_soccer),
                         if (skillLabel(profile.skillLevel) case final label?)
-                          ProfileInfoPill(
+                          InfoPill(
                             label: label,
                             icon: Icons.military_tech_outlined,
                           ),
@@ -404,7 +401,7 @@ class _CollapsedTitle extends StatelessWidget {
 /// tutto suo diverso da ogni altra pillola dell'app — il dettaglio che
 /// faceva sembrare la barra "attaccata" senza combaciare con i bordi del
 /// resto della pagina. Qui e a piena larghezza, raggio 999 come le altre
-/// pillole (vedi ProfileInfoPill), e il cursore scorre con lo stesso
+/// pillole (vedi InfoPill), e il cursore scorre con lo stesso
 /// AnimatedAlign gia usato per la lampada della bottom bar.
 class _TabSwitch extends StatelessWidget {
   const _TabSwitch({required this.value, required this.onChanged});

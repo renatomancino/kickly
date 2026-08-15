@@ -81,7 +81,10 @@ class _LineupBoardState extends State<LineupBoard> {
     if (!mounted) return;
     final repository = AppScope.of(context).repository;
     final client = repository.client;
-    if (client == null) return; // modalità demo: nessun backend a cui agganciarsi
+    // Modalità demo: nessun backend a cui agganciarsi.
+    if (client == null) {
+      return;
+    }
 
     final matchId = widget.match.summary.id;
     final filter = PostgresChangeFilter(
@@ -113,9 +116,8 @@ class _LineupBoardState extends State<LineupBoard> {
     _refreshTimer?.cancel();
     _refreshTimer = Timer(const Duration(milliseconds: 180), () async {
       if (!mounted) return;
-      final next = await AppScope.of(
-        context,
-      ).repository.getLineup(widget.match.summary.id);
+      final next = await AppScope.of(context).repository
+          .getLineup(widget.match.summary.id);
       if (next != null && mounted) setState(() => _lineup = next);
     });
   }
@@ -149,9 +151,8 @@ class _LineupBoardState extends State<LineupBoard> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _claim(int team, String slot) {
@@ -232,8 +233,9 @@ class _LineupBoardState extends State<LineupBoard> {
     (team) => team['captain_user_id']?.toString() == userId,
   );
 
-  JsonMap? _teamRow(int team) =>
-      _lineup.teams.where((row) => asInt(row['team_number']) == team).firstOrNull;
+  JsonMap? _teamRow(int team) => _lineup.teams
+      .where((row) => asInt(row['team_number']) == team)
+      .firstOrNull;
 
   String _formationOf(int team) => normalizeFormation(
     widget.match.summary.footballFormat,
@@ -260,8 +262,12 @@ class _LineupBoardState extends State<LineupBoard> {
   /// errore generico dopo un tocco a vuoto.
   String get _lockedReason {
     final status = widget.match.summary.status;
-    if (status == 'completed') return 'La partita è conclusa: la formazione è ora solo consultabile.';
-    if (status == 'cancelled') return 'La partita è annullata, la formazione è bloccata.';
+    if (status == 'completed') {
+      return 'La partita è conclusa: la formazione è ora solo consultabile.';
+    }
+    if (status == 'cancelled') {
+      return 'La partita è annullata, la formazione è bloccata.';
+    }
     if (!widget.match.summary.isLeagueMember) {
       return 'Entra nella lega per scegliere una posizione in campo.';
     }
@@ -326,8 +332,9 @@ class _LineupBoardState extends State<LineupBoard> {
     );
   }
 
-  List<JsonMap> _playersOf(int team) =>
-      _lineup.players.where((row) => asInt(row['team_number']) == team).toList();
+  List<JsonMap> _playersOf(int team) => _lineup.players
+      .where((row) => asInt(row['team_number']) == team)
+      .toList();
 
   Widget _teamCard(int teamNumber) {
     final players = _playersOf(teamNumber);
@@ -742,11 +749,19 @@ class _PitchLegend extends StatelessWidget {
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: [dot(AppTheme.primary), const SizedBox(width: 6), Text('Team A', style: muted)],
+          children: [
+            dot(AppTheme.primary),
+            const SizedBox(width: 6),
+            Text('Team A', style: muted),
+          ],
         ),
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: [dot(_teamBColor), const SizedBox(width: 6), Text('Team B', style: muted)],
+          children: [
+            dot(_teamBColor),
+            const SizedBox(width: 6),
+            Text('Team B', style: muted),
+          ],
         ),
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -811,7 +826,10 @@ class _Pitch extends StatelessWidget {
                 return counts;
               })
               .values
-              .fold<int>(1, (largest, count) => count > largest ? count : largest);
+              .fold<int>(
+                1,
+                (largest, count) => count > largest ? count : largest,
+              );
           final spacing = width / (widest + 1);
           final tokenWidth = spacing.clamp(34.0, 76.0) - 2;
           final avatar = (tokenWidth * .62).clamp(26.0, 44.0);

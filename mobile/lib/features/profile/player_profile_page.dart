@@ -18,7 +18,8 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    future ??= AppScope.of(context).repository.getPublicProfile(widget.username);
+    future ??= AppScope.of(context).repository
+        .getPublicProfile(widget.username);
   }
 
   @override
@@ -47,8 +48,9 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
               body: friendlyError(snapshot.error ?? 'Errore'),
               action: FilledButton(
                 onPressed: () => setState(
-                  () => future = AppScope.of(context).repository
-                      .getPublicProfile(widget.username),
+                  () =>
+                      future = AppScope.of(context).repository
+                          .getPublicProfile(widget.username),
                 ),
                 child: const Text('Riprova'),
               ),
@@ -151,11 +153,12 @@ class _PlayerProfilePageState extends State<PlayerProfilePage> {
                         runSpacing: 8,
                         alignment: WrapAlignment.center,
                         children: [
-                          ProfileInfoPill(label: roleLabel(profile.primaryPosition)),
-                          if (footLabel(profile.preferredFoot) case final label?)
-                            ProfileInfoPill(label: label, icon: Icons.sports_soccer),
+                          InfoPill(label: roleLabel(profile.primaryPosition)),
+                          if (footLabel(profile.preferredFoot)
+                              case final label?)
+                            InfoPill(label: label, icon: Icons.sports_soccer),
                           if (skillLabel(profile.skillLevel) case final label?)
-                            ProfileInfoPill(
+                            InfoPill(
                               label: label,
                               icon: Icons.military_tech_outlined,
                             ),

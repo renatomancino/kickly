@@ -99,6 +99,50 @@ class PlayerAvatar extends StatelessWidget {
   }
 }
 
+/// Pillola neutra per un metadato secondario (ruolo, formato, piede, livello).
+///
+/// Sta qui e non dentro `features/profile/` perché lo stesso identico elemento
+/// serve in più aree dell'app (player card, elenco leghe): tenerlo nella
+/// feature del profilo avrebbe costretto le altre feature a importarsi fra
+/// loro per riusarlo.
+///
+/// Da non confondere con la pillola verde usata dentro `MatchCard`: quella
+/// segnala uno *stato* (ci sei / lista d'attesa / distanza) e per questo è
+/// tinta del colore del marchio. Questa è deliberatamente neutra, perché
+/// descrive un attributo e non deve competere visivamente con i dati veri
+/// della card.
+class InfoPill extends StatelessWidget {
+  const InfoPill({required this.label, this.icon, super.key});
+
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.outline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: AppTheme.muted),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Tessera statistica della dashboard.
 ///
 /// Con [highlight] assume il verde pieno del marchio: serve per l'Overall, che
@@ -254,9 +298,10 @@ class _KicklySkeletonState extends State<KicklySkeleton>
     return FadeTransition(
       // Pulsazione lenta fra due opacità: comunica attesa senza il rumore di
       // uno shimmer che scorre.
-      opacity: Tween<double>(begin: .45, end: .9).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-      ),
+      opacity: Tween<double>(
+        begin: .45,
+        end: .9,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
       child: Container(
         width: widget.width,
         height: widget.height,

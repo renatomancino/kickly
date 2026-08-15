@@ -204,12 +204,24 @@ class ResultsBar extends StatelessWidget {
             height: 10,
             child: Row(
               children: [
-                if (wins > 0) Expanded(flex: wins, child: const _BarSegment(AppTheme.primary)),
+                if (wins > 0)
+                  Expanded(
+                    flex: wins,
+                    child: const _BarSegment(AppTheme.primary),
+                  ),
                 if (wins > 0 && (draws > 0 || losses > 0))
                   const SizedBox(width: 2),
-                if (draws > 0) Expanded(flex: draws, child: const _BarSegment(AppTheme.muted)),
+                if (draws > 0)
+                  Expanded(
+                    flex: draws,
+                    child: const _BarSegment(AppTheme.muted),
+                  ),
                 if (draws > 0 && losses > 0) const SizedBox(width: 2),
-                if (losses > 0) Expanded(flex: losses, child: const _BarSegment(AppTheme.danger)),
+                if (losses > 0)
+                  Expanded(
+                    flex: losses,
+                    child: const _BarSegment(AppTheme.danger),
+                  ),
               ],
             ),
           ),
@@ -219,9 +231,21 @@ class ResultsBar extends StatelessWidget {
           spacing: 16,
           runSpacing: 6,
           children: [
-            _ResultLegend(color: AppTheme.primary, label: 'Vittorie', value: wins),
-            _ResultLegend(color: AppTheme.muted, label: 'Pareggi', value: draws),
-            _ResultLegend(color: AppTheme.danger, label: 'Sconfitte', value: losses),
+            _ResultLegend(
+              color: AppTheme.primary,
+              label: 'Vittorie',
+              value: wins,
+            ),
+            _ResultLegend(
+              color: AppTheme.muted,
+              label: 'Pareggi',
+              value: draws,
+            ),
+            _ResultLegend(
+              color: AppTheme.danger,
+              label: 'Sconfitte',
+              value: losses,
+            ),
           ],
         ),
       ],
@@ -262,7 +286,10 @@ class _ResultLegend extends StatelessWidget {
         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
       ),
       const SizedBox(width: 4),
-      Text(label, style: const TextStyle(color: AppTheme.muted, fontSize: 12.5)),
+      Text(
+        label,
+        style: const TextStyle(color: AppTheme.muted, fontSize: 12.5),
+      ),
     ],
   );
 }
@@ -410,40 +437,4 @@ class _TrendPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TrendPainter oldDelegate) =>
       oldDelegate.values != values;
-}
-
-/// Badge coerente per ruolo/piede/livello, sia sul profilo privato sia su
-/// quello pubblico: prima ognuno dei due file disegnava la propria pillola
-/// (una con `Container`, l'altra con `Chip`), quindi lo stesso dato aveva un
-/// aspetto leggermente diverso a seconda di dove compariva.
-class ProfileInfoPill extends StatelessWidget {
-  const ProfileInfoPill({required this.label, this.icon, super.key});
-
-  final String label;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHigh,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.outline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 13, color: AppTheme.muted),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
 }

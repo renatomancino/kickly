@@ -6,6 +6,50 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
+/// Pillola del ruolo, l'unica accesa nella card di una lega.
+///
+/// Delle tre informazioni in fondo alla card (ruolo, formato, membri) il ruolo
+/// è l'unica che dice cosa PUOI FARE lì dentro, non com'è fatta la lega: se sei
+/// owner o admin hai i comandi di gestione, se sei membro no. Accendendo di
+/// verde solo questa quando gestisci, l'elenco si legge a colpo d'occhio —
+/// "queste sono le mie" — senza doverne leggere il testo. Le altre due restano
+/// neutre di proposito: se si accendesse tutto, non risalterebbe più niente.
+class _RolePill extends StatelessWidget {
+  const _RolePill({required this.league});
+
+  final LeagueSummary league;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!league.canManage) {
+      return InfoPill(label: league.roleLabel, icon: Icons.person_outline);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: .45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.shield_outlined, size: 13, color: AppTheme.primary),
+          const SizedBox(width: 5),
+          Text(
+            league.roleLabel,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class LeaguesPage extends StatefulWidget {
   const LeaguesPage({super.key});
 
@@ -63,7 +107,15 @@ class _LeaguesPageState extends State<LeaguesPage> {
                 ),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.add_circle_outline),
+                // Il tooltip di default di PopupMenuButton è un generico
+                // "Show menu", che a un lettore di schermo non dice nulla di
+                // cosa succede premendo: qui il pulsante è l'unico modo per
+                // entrare in una lega nuova, quindi va nominato.
+                tooltip: 'Crea una lega o usa un invito',
+                icon: const Icon(
+                  Icons.add_circle_outline,
+                  color: AppTheme.primary,
+                ),
                 onSelected: (value) => context.push(value),
                 itemBuilder: (_) => const [
                   PopupMenuItem(
@@ -131,13 +183,19 @@ class _LeaguesPageState extends State<LeaguesPage> {
                           child: InkWell(
                             onTap: () =>
                                 context.push('/leagues/${league.slug}'),
-                            borderRadius: BorderRadius.circular(20),
+                            // Il raggio arriva dal token del tema invece che
+                            // da un 20 scritto a mano: con un valore diverso
+                            // da quello della Card, l'onda del tocco usciva
+                            // dagli angoli arrotondati che la contengono.
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusLg,
+                            ),
                             child: Padding(
-                              padding: const EdgeInsets.all(17),
+                              padding: const EdgeInsets.all(16),
                               child: Row(
                                 children: [
-                                  LeagueLogo(league: league, size: 62),
-                                  const SizedBox(width: 15),
+                                  LeagueLogo(league: league, size: 58),
+                                  const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -145,38 +203,63 @@ class _LeaguesPageState extends State<LeaguesPage> {
                                       children: [
                                         Text(
                                           league.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleMedium,
                                         ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          '${league.city}, ${league.country}',
-                                          style: const TextStyle(
-                                            color: AppTheme.muted,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Wrap(
-                                          spacing: 7,
+                                        const SizedBox(height: 3),
+                                        Row(
                                           children: [
-                                            Chip(
-                                              label: Text(
-                                                league.footballFormat,
+                                            const Icon(
+                                              Icons.location_on_outlined,
+                                              size: 13,
+                                              color: AppTheme.mutedSoft,
+                                            ),
+                                            const SizedBox(width: 3),
+                                            Expanded(
+                                              child: Text(
+                                                '${league.city}, ${league.country}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: AppTheme.mutedSoft,
+                                                  fontSize: 12.5,
+                                                ),
                                               ),
                                             ),
-                                            Chip(
-                                              label: Text(
-                                                league.memberCountLabel,
-                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 9),
+                                        // Wrap e non Row: con tre pillole e il
+                                        // testo di sistema ingrandito, su
+                                        // schermi stretti vanno a capo invece
+                                        // di sfondare la card.
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: [
+                                            _RolePill(league: league),
+                                            InfoPill(
+                                              label: league.footballFormat
+                                                  .replaceAll('v', ' vs '),
+                                              icon: Icons.sports_soccer,
                                             ),
-                                            Chip(label: Text(league.roleLabel)),
+                                            InfoPill(
+                                              label: league.memberCountLabel,
+                                              icon: Icons.group_outlined,
+                                            ),
                                           ],
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.chevron_right),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: AppTheme.muted,
+                                    size: 20,
+                                  ),
                                 ],
                               ),
                             ),
