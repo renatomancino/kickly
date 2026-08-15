@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -117,9 +117,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           # Cache del tarball npm basata su package-lock.json: `npm ci` continua a
@@ -135,9 +135,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
-        run: npm run typecheck
-
+      # ORDINE OBBLIGATO: build PRIMA di typecheck, non e' una preferenza stilistica.
+      # `next build` genera .next/types/, che tsconfig.json include e da cui arrivano i
+      # tipi globali sintetizzati da Next (`LayoutProps`, `PageProps`, ...). Su un
+      # checkout pulito — cioe' sempre, in CI — invertire i due passi fa fallire tsc con
+      # "TS2304: Cannot find name 'LayoutProps'" in src/app/layout.tsx. In locale il bug
+      # non si vede, perche' una `.next/` di una build precedente resta sul disco e i
+      # tipi ci sono gia': e' esattamente il genere di rottura che esiste solo in CI e
+      # che questa pipeline serve a intercettare. (Verificato: prima riproducendo il
+      # fallimento con `rm -rf .next && npx tsc --noEmit`, poi confermando che con la
+      # build davanti torna verde.)
+      #
       # NESSUN file .env viene creato qui, ed e' verificato: la build gira a env vuoto.
       # Il motivo e' che il codice non legge mai le variabili Supabase a build time —
       # src/lib/env.ts espone `hasSupabaseEnv()` come guardia e `getSupabaseEnv()` lancia
@@ -148,6 +156,9 @@ jobs:
       # ha smesso di essere riproducibile senza credenziali.
       - name: Build
         run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
 
   # ---------------------------------------------------------------------------
   # IL JOB PIU' IMPORTANTE DELLA PIPELINE.
@@ -168,14 +179,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # JDK 21: mobile/android/app/build.gradle.kts fissa source/targetCompatibility e
       # jvmTarget a 17, ma quello e' il BYTECODE prodotto, non la JVM che esegue Gradle.
       # Gradle 9.3.1 + AGP 9.1.0 + Kotlin 2.4.0 richiedono una JVM moderna, e 21 e' la LTS
       # allineata a quella usata in locale. Va tenuta >= 17 e coerente con l'ambiente di
       # sviluppo: un JDK diverso e' una fonte classica di "sul mio Mac compila".
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -275,7 +286,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Usiamo il binario ufficiale invece dell'action `gitleaks/gitleaks-action`, che per
       # gli account Organization richiede un secret GITLEAKS_LICENSE: sulle PR da fork i
@@ -318,9 +329,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -344,7 +355,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Serve la storia completa: senza, `git merge-base` non ha abbastanza commit per
           # trovare il punto di divergenza fra il branch e la base.
