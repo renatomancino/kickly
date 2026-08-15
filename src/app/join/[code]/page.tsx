@@ -6,7 +6,31 @@ import { JoinLeaguePreview } from "@/features/leagues/join-league";
 import { getInvitePreview } from "@/features/leagues/data";
 import { getCurrentUser } from "@/lib/auth";
 
-export const metadata: Metadata = { title: "Invito lega", robots: { index: false } };
+/**
+ * Questa e' la rotta piu' delicata dell'app: l'URL stesso E' il segreto, perche'
+ * contiene il codice invito a una lega privata. Il noindex qui e' il secondo
+ * strato di difesa, non il primo.
+ *
+ * Differenza fra i due strati, che e' il motivo per cui servono entrambi:
+ * - `robots.txt` (src/app/robots.ts) e' una direttiva sul CRAWLING: dice al bot
+ *   di non richiedere proprio l'URL. Il bot educato obbedisce, ma proprio perche'
+ *   non scarica la pagina non legge nemmeno questo meta tag.
+ * - il meta `robots` qui sotto e' una direttiva sull'INDICIZZAZIONE: agisce solo
+ *   su chi la pagina l'ha gia' scaricata, cioe' i crawler che ignorano
+ *   robots.txt (o che arrivano qui da un redirect, dove robots.txt non entra in
+ *   gioco). Per loro questo tag e' l'unica cosa che impedisce l'indicizzazione.
+ *
+ * `follow: false` oltre a `index: false` e' deliberato: senza, un crawler che
+ * ignora robots.txt non indicizzerebbe la pagina ma seguirebbe comunque i link
+ * verso l'interno della lega, scoprendo altre rotte da tentare. Su una pagina
+ * che nasce da un link privato non c'e' nessun link che valga la pena seguire.
+ *
+ * Nota: la difesa sostanziale resta il redirect a /login qui sotto — un crawler
+ * e' sempre anonimo, quindi il contenuto dell'invito (nome lega, membri) non gli
+ * viene mai servito. Il redirect e' coperto dall'header X-Robots-Tag in
+ * next.config.ts, perche' su una risposta 307 un tag <meta> non esiste.
+ */
+export const metadata: Metadata = { title: "Invito lega", robots: { index: false, follow: false } };
 
 export default async function InvitePage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
