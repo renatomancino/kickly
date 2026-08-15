@@ -193,6 +193,15 @@ class _LeaguesPageState extends State<LeaguesPage> {
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Row(
+                                // Allineato in alto e non centrato: con tre
+                                // pillole la riga va spesso a capo, e con
+                                // l'allineamento centrato il logo restava
+                                // sospeso a meta' altezza con un vuoto sopra,
+                                // slegato dal nome della lega. In alto invece
+                                // logo e titolo partono dalla stessa riga, e
+                                // la card regge sia una che due righe di
+                                // pillole senza cambiare equilibrio.
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   LeagueLogo(league: league, size: 58),
                                   const SizedBox(width: 14),
@@ -255,10 +264,17 @@ class _LeaguesPageState extends State<LeaguesPage> {
                                       ],
                                     ),
                                   ),
-                                  const Icon(
-                                    Icons.chevron_right,
-                                    color: AppTheme.muted,
-                                    size: 20,
+                                  // Spinta in giu' di quel tanto che basta a
+                                  // stare sulla riga del titolo: allineata in
+                                  // alto a filo sembrerebbe appesa al bordo
+                                  // della card invece che riferita alla lega.
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 2),
+                                    child: Icon(
+                                      Icons.chevron_right,
+                                      color: AppTheme.muted,
+                                      size: 20,
+                                    ),
                                   ),
                                 ],
                               ),
