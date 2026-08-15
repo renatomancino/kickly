@@ -1,56 +1,133 @@
-# Report sessione autonoma — Affidabilità BE/FE
+# Report sessione autonoma — Affidabilità BE/FE, CI, qualità codice
 
-Continuazione autonoma su richiesta esplicita dell'utente: "continua a fare migliorie lato BE ed FE fino ad esaurimento dei tkn senza domandare nulla [...] genera un report e cerca di portare le task a termine [...] altrimenti scrivi nel report quello che manca". Nessuna domanda posta.
+Continuazione autonoma su richiesta esplicita dell'utente. Nessuna domanda posta salvo
+un caso (scope della CI, con risposta ricevuta e implementata).
 
-## ✅ Migrazione `profiles` applicata e verificata
+## Stato: tutto fatto, un solo passo manuale resta
 
-La falla di sicurezza segnalata in questo report — qualunque utente autenticato poteva
-scrivere direttamente `profiles.overall` e falsificarsi il rating — **è stata chiusa**.
-Verificato interrogando il database di produzione: fra le colonne aggiornabili da
-`authenticated` restano solo le 13 che l'app scrive davvero (`username`, `first_name`,
-`city`, ...), e `overall` non c'è più.
-
-## ⚠️ Unica cosa ancora da fare (richiede admin sull'upstream)
-
-I sei check della nuova CI girano e sono verdi, ma **un check rosso da solo non impedisce
-il merge**: serve una branch protection rule su `renatomancino/kickly`, che può creare solo
-chi ha admin lì. Istruzioni pronte da copiare in
+Ogni cosa trovata in questa sessione è stata **corretta, verificata e pushata**. L'unica
+cosa che non posso fare da qui è attivare la branch protection su GitHub (serve admin
+sull'upstream `renatomancino/kickly`, io ho solo READ lì). Istruzioni pronte in
 [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md) — cinque minuti, una volta sola.
 
-## Riassunto: tutto il resto è stato completato e pushato
+---
 
-### Redesign profilo (prima di questa fase BE/FE)
-- Area profilo (privato, pubblico, editor) rifatta in stile Apple: header a scomparsa, overall come anello di progresso, tab switch Panoramica/Andamento, grafico dell'andamento rating, barra risultati. Include due giri di correzione su feedback diretto: un overflow di layout e un bug del titolo della testata, poi un secondo giro perché il selettore di tab non combaciava con i bordi delle card sotto.
-- PR [renatomancino/kickly#2](https://github.com/renatomancino/kickly/pull/2) aperta e aggiornata con screenshot e testo.
-- SMTP/email: tornato al default Supabase (no dominio necessario), confermato che "Confirm email" era già disattivato — l'unica mail che l'app invia davvero è il reset password.
+## Backend / Supabase
 
-### Backend / Supabase
-- **Sicurezza — `profiles.overall`**: vedi sezione rossa sopra, unico elemento non completabile in autonomia.
-- **Sicurezza — pulizia RLS minore**: policy morta su `player_rating_history` (stesso pattern di `league_members`, non sfruttabile oggi perché il grant è già revocato, ma ripulita per non poter tornare viva per errore) e grant INSERT/DELETE ridondanti su `player_stats` senza policy corrispondente (igiene, nessun rischio reale). Stessa migrazione di cui sopra, quindi anche questi due punti aspettano l'esecuzione manuale.
-- **Sicurezza — password**: alzato il minimo lato server da 6 a 8 caratteri (era già richiesto lato client senza che il server lo garantisse davvero) — applicato e verificato live. La protezione contro password compromesse (HaveIBeenPwned) è disponibile solo sul piano Supabase Pro (il progetto è su Free) — non toccabile senza upgrade a pagamento, decisione che spetta a te.
-- **Advisor**: controllati Security Advisor (0 errori; 32 warning, quasi tutti "funzione SECURITY DEFINER eseguibile da utenti loggati" — verificato che ognuna controlla `auth.uid()` internamente, nessuna si fida di parametri esterni; nessuna azione necessaria) e Performance Advisor (0 errori, 0 warning, 20 "Unused Index" — normale per un'app giovane con poco traffico).
-- **Audit RLS completo**: lette tutte le 22 migrazioni per ogni tabella con RLS attivo. Tutte le tabelle diverse da `profiles`/`player_rating_history`/`player_stats` risultano già corrette (scritture solo via RPC `SECURITY DEFINER` con controllo esplicito di `auth.uid()`).
+- **Falla di sicurezza chiusa e verificata in produzione**: `profiles.overall` (il rating
+  del giocatore) era scrivibile direttamente da qualunque utente autenticato, bypassando
+  il calcolo ufficiale post-partita. Stesso tipo di falla già trovata su `league_members`
+  (grant ampio mai ristretto per colonna), ma questa era **attivamente sfruttabile**, non
+  solo latente. Migrazione `20260814170000_lockdown_profiles_sensitive_columns.sql`
+  applicata: verificato via query su `information_schema.column_privileges` che restano
+  scrivibili solo le 13 colonne che l'app aggiorna davvero.
+- Nella stessa migrazione, due pulizie minori: una policy morta su `player_rating_history`
+  (stesso pattern, non sfruttabile perché il grant è già revocato, ma ripulita perché non
+  torni viva per errore) e grant INSERT/DELETE ridondanti su `player_stats` senza policy
+  corrispondente.
+- Minimo password lato server alzato da 6 a 8 caratteri, allineandolo a quanto il client
+  richiedeva già senza che il server lo garantisse davvero. Applicato e verificato live.
+- Protezione contro password compromesse (HaveIBeenPwned): **non attivabile**, è una
+  funzionalità del piano Supabase Pro e il progetto è su Free. Serve un upgrade a
+  pagamento — decisione che spetta a te, non l'ho toccata.
+- Security Advisor (0 errori, 32 warning — verificati uno a uno: sono tutte funzioni
+  `SECURITY DEFINER` che controllano `auth.uid()` internamente, nessuna si fida di
+  parametri esterni) e Performance Advisor (0 errori, 0 warning, solo indici non ancora
+  usati — normale per un'app con poco traffico) passati in rassegna.
+- Audit RLS completo su tutte le 22 migrazioni: ogni altra tabella risulta corretta,
+  scritture solo via RPC `SECURITY DEFINER` con controllo esplicito del chiamante.
 
-### Frontend / Flutter
-- **Crash potenziali**: audit sistematico di tutto `mobile/lib/` (32 file) per il pattern "await poi `setState`/`context` senza controllo `mounted`" — la stessa classe di bug del crash "Duplicate GlobalKey" già risolto in una fase precedente della sessione, semplicemente non era stata cercata sistematicamente ovunque. Trovati e corretti **12 casi reali** in 7 file (`league_form_page.dart`, `auth_page.dart`, `join_league_page.dart`, `match_form_page.dart`, `profile_editor_page.dart`, `league_settings_page.dart`, `notifications_page.dart`).
-- **Gestione errori/resilienza**: audit dedicato di `kickly_repository.dart` e delle pagine che lo chiamano. Corretto tutto quello che è emerso:
-  - "Elimina lega" e "Lascia lega" non avevano try/catch né stato di caricamento — su un fallimento il bottone sembrava morto, senza alcun feedback. Ora entrambi mostrano l'errore e si disabilitano durante l'operazione.
-  - "Trasferisci proprietà" nel menu membri di una lega era l'unica azione distruttiva senza dialog di conferma — un tap accidentale trasferiva la proprietà in modo irreversibile. Aggiunta conferma.
-  - I bottoni di conferma presenza (Ci sono/Forse/Non posso) restavano visibili e cliccabili anche dopo che un admin chiudeva le iscrizioni, causando un errore generico invece di sparire con una spiegazione chiara.
-  - Tre schermate (profilo pubblico, impostazioni lega, chiusura partita) non distinguevano un errore di rete da "non trovato"/"accesso negato" — il caso peggiore era un admin legittimo a cui veniva detto che non aveva i permessi, quando in realtà la richiesta era solo caduta. Ora tutte e tre hanno un vero ramo di errore con "Riprova".
-  - Aprire una notifica o "Leggi tutte" con rete instabile non faceva nulla, senza messaggio — ora gestito.
-  - Aggiunte ~18 voci mancanti in `friendlyError()` (i messaggi comprensibili per gli errori delle RPC), trovate confrontando ogni `raise exception` nelle migrazioni con quelle già gestite: soprattutto i codici di `finalize_match` (chiusura partita — un admin che sbaglia i gol dei singoli giocatori ora sa cosa correggere invece di vedere "Qualcosa non ha funzionato"), voto MVP, iscrizioni chiuse, capienza.
-  - Nessuna chiamata di rete nell'app aveva un timeout esplicito — su rete capitiva/assente lo spinner girava indefinitamente. Aggiunto un timeout centralizzato di 15s su tutte le richieste Supabase (REST/RPC/Storage/Auth) via un `http.Client` custom passato a `Supabase.initialize()`, invece di dover toccare ogni singola chiamata nel repository.
-- **Dipendenze**: `cupertino_icons` e `supabase_flutter` aggiornati all'ultima patch (nessun rischio, nessuna API cambiata). `flutter_secure_storage` e `flutter_local_notifications` lasciati pinnati alle versioni attuali — entrambi erano stati fissati deliberatamente in una fase precedente della sessione per risolvere build Android realmente rotte, e un salto di versione (specie i 3 major di flutter_local_notifications) richiederebbe un test reale su device che non è disponibile ora che sei via.
+## Frontend mobile (Flutter)
 
-### PWA (Next.js, `src/`)
-- Non toccata (il focus di questa sessione, come tutta la sessione precedente, è sempre stato l'app mobile), ma verificata per sicurezza: `npm install` + `npm run lint` + `npm run typecheck` + `npm run build` tutti puliti, 0 vulnerabilità nelle dipendenze. Nessuna azione necessaria.
+- **12 crash potenziali corretti**: audit sistematico di tutto `mobile/lib/` per il
+  pattern "`await`, poi `setState`/`BuildContext` su un widget ormai smontato" — la stessa
+  causa del crash `Duplicate GlobalKey` già risolto in una fase precedente, semplicemente
+  non era stato cercato ovunque. 7 file coinvolti.
+- **Gestione errori sistemata** in tutto il data layer e nelle pagine che lo chiamano:
+  azioni distruttive senza feedback ("Elimina lega", "Lascia lega" — il bottone sembrava
+  morto su un fallimento), un'azione irreversibile senza conferma ("Trasferisci
+  proprietà"), tre schermate che confondevano un errore di rete con "non
+  trovato"/"accesso negato" (il caso peggiore: un admin legittimo a cui veniva detto che
+  non aveva permessi), i bottoni di conferma presenza rimasti attivi dopo la chiusura
+  iscrizioni, ~18 codici di errore RPC senza messaggio comprensibile (soprattutto sulla
+  chiusura partita), nessun timeout di rete da nessuna parte — ora 15s centralizzati su
+  ogni richiesta Supabase.
+- **Lint Dart irrigidite**: `analysis_options.yaml` era ancora il template stock. Aggiunte
+  7 regole, scelte una alla volta verificando che intercettassero bug veri e non rumore
+  stilistico (`unawaited_futures`, `cancel_subscriptions`, `close_sinks`,
+  `avoid_dynamic_calls`, ecc.). **Verificato con una prova concreta, non assunto**: il set
+  di lint disponibile in Dart NON copre il pattern `setState` dopo `await` senza
+  `if (mounted)` — ripristinando i file pre-fix e rilanciando l'analisi con tutte le
+  regole nuove, zero segnalazioni sui bug reali. Il file lo dice esplicitamente, così chi
+  lo legge non si illude di essere coperto.
+- **Redesign area profilo** (privato, pubblico, editor) in stile Apple: header a
+  scomparsa, overall come anello di progresso, tab Panoramica/Andamento, grafico
+  dell'andamento rating, barra risultati. Due giri di correzione su feedback diretto.
+- **Redesign pagina Leghe**: pillole al posto dei `Chip` Material, raggio d'angolo
+  allineato al token del tema, ruolo (owner/admin) come unico elemento accentato — è
+  l'unico dato che dice cosa puoi *fare*, non solo com'è fatta la lega. Corretto anche un
+  allineamento verticale del logo scoperto solo guardando lo screenshot reale.
+- `ProfileInfoPill` spostata da `features/profile/` a `core/widgets/common.dart` come
+  `InfoPill`, condivisa ora da profilo e leghe invece di essere duplicata.
+- Dipendenze: `cupertino_icons` e `supabase_flutter` aggiornate all'ultima patch.
+  `flutter_secure_storage` e `flutter_local_notifications` lasciate pinnate: entrambe
+  erano state fissate deliberatamente per risolvere build Android realmente rotte, un
+  salto di versione richiederebbe un test reale su device.
 
-## Verifiche eseguite su tutto il lavoro sopra
-- `flutter analyze` pulito dopo ogni gruppo di modifiche.
-- `flutter test` pulito (16/16) dopo ogni gruppo di modifiche.
-- Verifica live su iOS Simulator dopo le modifiche più rischiose (fix del layout del profilo, fix della logica RSVP `registrationClosedAt`) per confermare che non avessero rotto il caso normale.
-- Tutti i commit pushati su `claude/flutter-app-improvements-3973bd` (branch della PR #2), con messaggi che spiegano il "perché" di ogni fix.
+## Frontend web (PWA Next.js) e SEO/privacy
+
+- **Chiusa un'esposizione di privacy**: `/join/[code]` (il link di invito a una lega) era
+  pubblica e senza alcun `robots.txt` — se un solo invito fosse finito indicizzato,
+  chiunque avrebbe potuto cercarlo e infilarsi in una lega privata. Aggiunti tre strati:
+  `robots.ts` (i crawler educati non richiedono nemmeno la pagina), meta `robots: noindex`
+  di pagina, e header `X-Robots-Tag` in `next.config.ts` per `/api`, `/auth` e
+  `/join` — quest'ultimo necessario perché `/join/[code]` risponde con un redirect a un
+  visitatore anonimo, e un redirect non ha corpo HTML dove mettere un `<meta>`.
+  `sitemap.ts` lista solo la landing, l'unica pagina pubblica che ha senso indicizzare.
+- Da tenere presente: i profili pubblici (`player/[username]`) stanno dietro
+  autenticazione, quindi non c'è contenuto indicizzabile da posizionare. Per un'app
+  mobile-first la leva di scoperta è l'App Store Optimization, non la SEO — questo
+  intervento è per l'esposizione dei codici invito, non per il traffico.
+
+## CI/CD (nuova)
+
+- Prima pipeline GitHub Actions del repo, 6 job in parallelo: `Flutter (analyze, test,
+  format)`, `PWA (lint, typecheck, build)`, `Android (APK debug)`, `Secret scan
+  (gitleaks)`, `npm audit`, `Migrazioni immutabili`.
+- Vincolo di design: le PR arrivano dal fork `mariocelzo/kickly`, quindi girano senza
+  secret e con token in sola lettura. Ogni job funziona a secchio vuoto;
+  deliberatamente **non** uso `pull_request_target` (è il vettore noto per far rubare
+  secret a una PR ostile da un fork).
+- Il job Android è quello che vale di più: entrambe le rotture di build già viste in
+  questa sessione (`flutter_secure_storage` su un'API Android inesistente, `workmanager`
+  incompatibile con AGP 9) erano invisibili ad `analyze` e ai test, visibili solo a una
+  build vera.
+- **Il primo run reale ha trovato due bug veri**, che è esattamente il punto di eseguirla
+  invece di limitarsi a scriverla:
+  1. Il typecheck girava prima della build: i tipi generati da Next (`LayoutProps`) non
+     esistevano ancora su un checkout pulito. Bug presente anche nello script
+     `npm run check` del repo — rotto su qualunque clone vergine. Corretto l'ordine in
+     entrambi, verificato con `rm -rf .next && npm run check` da zero.
+  2. 17 file Dart mai passati per `dart format`. Formattati, isolati in un commit a parte
+     perché il diff resti leggibile.
+  3. `dart format` ha spezzato tre `if` su più righe, facendo scattare la regola che
+     richiede le graffe. Corretto.
+- Secondo run: verde su tutti e 6 i job, nessun avviso residuo (bump anche di
+  `actions/cache` alla v5, ultima action rimasta sul runtime Node deprecato).
+- `.github/pull_request_template.md` aggiunto.
+
+## Verifiche eseguite
+
+- `flutter analyze` e `flutter test` (16/16) puliti dopo ogni gruppo di modifiche.
+- `npm run check` (lint + build + typecheck) pulito da checkout vergine.
+- CI verde su un run reale di GitHub Actions, non solo YAML sintatticamente valido.
+- Verifica live su iOS Simulator per le modifiche più rischiose (layout profilo, RSVP
+  dopo chiusura iscrizioni, redesign Leghe) — uno degli allineamenti scorretti nella card
+  Leghe è stato trovato proprio guardando lo screenshot, non nel codice.
+- Migrazioni RLS (`league_members`, `profiles`) verificate in produzione con query di
+  controllo, non solo "il file esiste".
 
 ## Da fare
-Solo l'esecuzione manuale della migrazione `profiles` descritta in cima a questo file. Tutto il resto identificato in questa sessione è stato completato.
+
+Un solo passo, manuale per forza (richiede permessi che non ho): attivare la branch
+protection sull'upstream seguendo [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md).
