@@ -287,12 +287,12 @@ class _LineupBoardState extends State<LineupBoard> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
         if (_canChoose)
-          Text(
+          const Text(
             'Tocca una posizione libera. Puoi spostarti finché la partita non viene chiusa.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: .55),
-              height: 1.45,
-            ),
+            // Token e non un bianco al 55%: il grigio dei testi secondari è lo
+            // stesso in tutta l'app, e a occhio nudo un bianco trasparente su
+            // una card cambia tinta a seconda di cosa ha sotto.
+            style: TextStyle(color: AppTheme.muted, height: 1.45),
           )
         else
           _LockedNotice(message: _lockedReason),
@@ -376,7 +376,7 @@ class _LineupBoardState extends State<LineupBoard> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: accent,
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: Text(
                     teamNumber == 1 ? 'A' : 'B',
@@ -397,43 +397,34 @@ class _LineupBoardState extends State<LineupBoard> {
                       ),
                       Text(
                         '${players.length}/$side in campo',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: .5),
+                        style: const TextStyle(
+                          color: AppTheme.muted,
                           fontSize: 11,
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (average != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: AppTheme.outline),
-                    ),
-                    child: Text(
-                      'OVR $average',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
+                // InfoPill invece della pillola costruita a mano: è la stessa
+                // informazione neutra delle altre schermate (un attributo, non
+                // uno stato) e ora ne condivide superficie, bordo e raggio.
+                if (average != null) InfoPill(label: 'OVR $average'),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Text(
-                  'Modulo',
+                const Text(
+                  'MODULO',
+                  // Occhiello di sezione come nel resto dell'app: maiuscolo,
+                  // 11/w800/1.5 in muted. Prima era un'etichetta a sé, con una
+                  // taglia e un grigio che non comparivano da nessun'altra
+                  // parte.
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: .5),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    color: AppTheme.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
                   ),
                 ),
                 const Spacer(),
@@ -449,10 +440,10 @@ class _LineupBoardState extends State<LineupBoard> {
                     onSelected: (value) => _changeFormation(teamNumber, value),
                   )
                 else
-                  Chip(
-                    label: Text(formation),
-                    visualDensity: VisualDensity.compact,
-                  ),
+                  // Il Chip di Material era l'ultimo rimasto qui dentro: fuori
+                  // dal linguaggio delle pillole del design system, con un
+                  // raggio e un grigio suoi. Sola lettura, quindi InfoPill.
+                  InfoPill(label: formation),
               ],
             ),
             const SizedBox(height: 12),
@@ -483,6 +474,7 @@ class _LineupBoardState extends State<LineupBoard> {
   /// preso e, se sei tu, permette di liberarlo.
   void _showOccupant(MatchParticipant player, String role) {
     final isMine = player.userId == _myUserId;
+    final isCaptain = _isCaptain(player.userId);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -500,12 +492,25 @@ class _LineupBoardState extends State<LineupBoard> {
               const SizedBox(height: 12),
               Text(
                 player.displayName,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 4),
-              Text(
-                '$role · ${player.overall} OVR',
-                style: TextStyle(color: Colors.white.withValues(alpha: .55)),
+              const SizedBox(height: 10),
+              // Le stesse pillole del resto dell'app al posto della riga di
+              // testo con i puntini: un Wrap perché con la fascia da capitano
+              // sono tre, e con il testo di sistema ingrandito devono andare a
+              // capo invece di sfondare il foglio.
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.center,
+                children: [
+                  InfoPill(label: role, icon: Icons.place_outlined),
+                  InfoPill(label: '${player.overall} OVR', icon: Icons.bolt),
+                  if (isCaptain) const _CaptainPill(),
+                ],
               ),
               const SizedBox(height: 20),
               if (isMine)
@@ -521,10 +526,10 @@ class _LineupBoardState extends State<LineupBoard> {
                   ),
                 )
               else
-                Text(
+                const Text(
                   'Questa posizione è occupata. Scegline una libera.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white.withValues(alpha: .5)),
+                  style: TextStyle(color: AppTheme.muted),
                 ),
             ],
           ),
@@ -538,6 +543,42 @@ class _LineupBoardState extends State<LineupBoard> {
 /// Corrisponde a `sky-400` usato dalla PWA.
 const Color _teamBColor = Color(0xFF38BDF8);
 
+/// Pillola della fascia da capitano, gemella di `InfoPill` ma in oro.
+///
+/// Non usa `InfoPill` perché quella è deliberatamente neutra: descrive un
+/// attributo. Il capitano invece è un ruolo, l'unico che può cambiare modulo, e
+/// sul campo è già segnato dalla "C" dorata: qui riusa lo stesso oro così che
+/// la scheda del giocatore e il token sul campo si riconoscano come la stessa
+/// cosa.
+class _CaptainPill extends StatelessWidget {
+  const _CaptainPill();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: AppTheme.gold.withValues(alpha: .14),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: AppTheme.gold.withValues(alpha: .45)),
+    ),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.military_tech, size: 13, color: AppTheme.gold),
+        SizedBox(width: 5),
+        Text(
+          'Capitano',
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.gold,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Avviso mostrato quando il campo è in sola lettura, con il motivo esplicito.
 class _LockedNotice extends StatelessWidget {
   const _LockedNotice({required this.message});
@@ -549,12 +590,16 @@ class _LockedNotice extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: AppTheme.surfaceHigh,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
       border: Border.all(color: AppTheme.outline),
     ),
     child: Row(
       children: [
-        const Icon(Icons.lock_outline, size: 18, color: AppTheme.primary),
+        // Lucchetto grigio e non verde: qui non c'è niente da fare e niente da
+        // celebrare, è uno stato passivo. Il verde del marchio in questa
+        // schermata appartiene al campo — ai giocatori del Team A e alla
+        // propria posizione — e un'icona accesa in cima glielo rubava.
+        const Icon(Icons.lock_outline, size: 18, color: AppTheme.muted),
         const SizedBox(width: 11),
         Expanded(
           child: Text(
@@ -649,33 +694,45 @@ class _TeamSwitcher extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppTheme.outline),
       ),
       child: Row(
         children: [
           for (var team = 1; team <= 2; team++)
             Expanded(
-              child: GestureDetector(
-                onTap: () => onChanged(team),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  height: 42,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: active == team
-                        ? (team == 1 ? AppTheme.primary : _teamBColor)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Team ${team == 1 ? 'A' : 'B'}  ${counts[team - 1]}/$side',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
+              // Semantics esplicito: a un lettore di schermo questo è un
+              // selettore a due stati, non due testi affiancati, e senza
+              // `selected` non c'è modo di sapere quale squadra si sta
+              // guardando.
+              child: Semantics(
+                button: true,
+                selected: active == team,
+                child: GestureDetector(
+                  onTap: () => onChanged(team),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
                       color: active == team
-                          ? AppTheme.background
-                          : Colors.white.withValues(alpha: .55),
+                          ? (team == 1 ? AppTheme.primary : _teamBColor)
+                          : Colors.transparent,
+                      // Raggio interno del token: il contenitore è a radiusLg
+                      // con 4 di padding, quindi il tassello selezionato deve
+                      // stare un gradino sotto o gli angoli non seguono la
+                      // curva esterna.
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    ),
+                    child: Text(
+                      'Team ${team == 1 ? 'A' : 'B'}  ${counts[team - 1]}/$side',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        color: active == team
+                            ? AppTheme.background
+                            : AppTheme.muted,
+                      ),
                     ),
                   ),
                 ),
@@ -710,7 +767,7 @@ class _FormationPicker extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.surfaceHigh,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         border: Border.all(color: AppTheme.outline),
       ),
       child: Row(
@@ -733,47 +790,57 @@ class _PitchLegend extends StatelessWidget {
   const _PitchLegend();
 
   @override
-  Widget build(BuildContext context) {
-    final muted = TextStyle(
-      color: Colors.white.withValues(alpha: .45),
-      fontSize: 11,
-    );
-    Widget dot(Color color) => Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dot(AppTheme.primary),
-            const SizedBox(width: 6),
-            Text('Team A', style: muted),
-          ],
+  Widget build(BuildContext context) => const Wrap(
+    spacing: 16,
+    runSpacing: 8,
+    children: [
+      _LegendItem(color: AppTheme.primary, label: 'Team A'),
+      _LegendItem(color: _teamBColor, label: 'Team B'),
+      // Token e non l'esadecimale scritto a mano: è lo stesso oro della "C"
+      // sul campo e dei trofei, e tenerlo in due posti come costante separata
+      // era il modo più rapido per farli divergere.
+      _LegendItem(
+        color: AppTheme.gold,
+        icon: Icons.military_tech,
+        label: 'Il capitano sceglie il modulo',
+      ),
+    ],
+  );
+}
+
+/// Voce della legenda: pallino (o icona) più didascalia.
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.color, required this.label, this.icon});
+
+  final Color color;
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (icon != null)
+        Icon(icon, size: 13, color: color)
+      else
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dot(_teamBColor),
-            const SizedBox(width: 6),
-            Text('Team B', style: muted),
-          ],
+      const SizedBox(width: 6),
+      // Flexible e non il solo Text: dentro una Wrap la riga riceve tutta la
+      // larghezza disponibile come massimo, e una didascalia lunga come quella
+      // del capitano sfondava di 65px su uno schermo da 320. Così invece la
+      // voce si stringe e va a capo con le altre.
+      Flexible(
+        child: Text(
+          label,
+          style: const TextStyle(color: AppTheme.mutedSoft, fontSize: 11),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.military_tech, size: 13, color: Color(0xFFFFD84D)),
-            const SizedBox(width: 6),
-            Text('Il capitano sceglie il modulo', style: muted),
-          ],
-        ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
 }
 
 /// Rettangolo di gioco con gli slot posizionati sopra.
@@ -837,12 +904,20 @@ class _Pitch extends StatelessWidget {
           final tokenHeight = avatar + 30;
 
           return ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            // Raggio del token invece di un 20 a occhio: il campo sta dentro
+            // una Card arrotondata a radiusLg e con un valore più largo del
+            // contenitore i due archi non erano concentrici.
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             child: Stack(
               children: [
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: const BoxDecoration(
+                      // I due verdi dell'erba non sono token e non devono
+                      // diventarlo: non sono colori dell'interfaccia ma la
+                      // superficie di gioco, l'unica illustrazione dell'app.
+                      // Il verde del marchio qui sopra ci va per i giocatori,
+                      // non per il prato.
                       gradient: LinearGradient(
                         colors: [Color(0xFF216536), Color(0xFF174A2A)],
                         begin: Alignment.topLeft,
@@ -862,7 +937,7 @@ class _Pitch extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: .34),
-                      borderRadius: BorderRadius.circular(99),
+                      borderRadius: BorderRadius.circular(999),
                       // Non AppTheme.outline: qui l'etichetta sta sopra il
                       // verde del campo, non su una superficie della card, e
                       // le regole di contrasto sono quelle di un overlay, non
@@ -948,6 +1023,12 @@ class _Pitch extends StatelessWidget {
 }
 
 /// Singola casella sul campo: cerchio con avatar o sigla del ruolo, nome sotto.
+///
+/// I bianchi e i neri trasparenti che si vedono qui sotto non sono una fuga dai
+/// token: questo widget vive sopra l'erba, non su una superficie del design
+/// system, quindi il contrasto va calcolato sul verde del campo. È la stessa
+/// ragione per cui l'etichetta del modulo, in alto a sinistra sul campo, ha un
+/// bordo bianco al 24% invece di `AppTheme.outline`.
 class _SlotToken extends StatelessWidget {
   const _SlotToken({
     required this.slot,
@@ -972,10 +1053,18 @@ class _SlotToken extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final free = player == null;
+    // Uno slot libero che non si può prendere (partita chiusa, presenza non
+    // confermata, azione in corso) prima era identico a uno prendibile: il
+    // campo continuava a invitare al tocco mentre l'avviso in cima diceva il
+    // contrario. Qui le caselle libere si spengono, e il blocco si vede sul
+    // campo e non solo nel riquadro sopra.
+    final selectable = free && onTap != null;
+    final freeBorder = Colors.white.withValues(alpha: selectable ? .55 : .2);
+
     return Semantics(
       button: onTap != null,
       label: free
-          ? 'Posizione ${slot.role} libera'
+          ? 'Posizione ${slot.role} libera${selectable ? '' : ', non disponibile'}'
           : '${player!.displayName}, ${slot.role}${captain ? ', capitano' : ''}',
       child: GestureDetector(
         onTap: onTap,
@@ -995,17 +1084,13 @@ class _SlotToken extends StatelessWidget {
                     color: mine
                         ? accent
                         : free
-                        ? Colors.black.withValues(alpha: .28)
-                        : const Color(0xFF101411),
+                        ? Colors.black.withValues(alpha: selectable ? .28 : .16)
+                        : AppTheme.background,
                     shape: BoxShape.circle,
                     border: Border.all(
                       // Lo slot libero ha bordo tenue, quello occupato pieno,
                       // il proprio è nel colore della squadra.
-                      color: mine
-                          ? accent
-                          : free
-                          ? Colors.white.withValues(alpha: .55)
-                          : accent,
+                      color: mine ? accent : (free ? freeBorder : accent),
                       width: mine ? 2.5 : 2,
                     ),
                     boxShadow: [
@@ -1014,6 +1099,16 @@ class _SlotToken extends StatelessWidget {
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
+                      // Alone nel colore della squadra sotto al proprio token.
+                      // Su un campo con dieci caselle uguali il solo riempimento
+                      // pieno non bastava a farsi trovare a colpo d'occhio:
+                      // l'alone lo stacca dallo sfondo anche in mezzo agli altri.
+                      if (mine)
+                        BoxShadow(
+                          color: accent.withValues(alpha: .45),
+                          blurRadius: 14,
+                          spreadRadius: 1,
+                        ),
                     ],
                   ),
                   alignment: Alignment.center,
@@ -1029,7 +1124,9 @@ class _SlotToken extends StatelessWidget {
                       ? Text(
                           slot.shortRole,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: .85),
+                            color: Colors.white.withValues(
+                              alpha: selectable ? .85 : .4,
+                            ),
                             fontSize: avatarSize * .34,
                             fontWeight: FontWeight.w900,
                           ),
@@ -1037,27 +1134,7 @@ class _SlotToken extends StatelessWidget {
                       : _avatar(),
                 ),
                 if (captain)
-                  Positioned(
-                    right: -3,
-                    top: -3,
-                    child: Container(
-                      width: 17,
-                      height: 17,
-                      alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFD84D),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Text(
-                        'C',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
+                  const Positioned(right: -3, top: -3, child: _CaptainBadge()),
               ],
             ),
             const SizedBox(height: 4),
@@ -1065,8 +1142,15 @@ class _SlotToken extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(
-                color: mine ? accent : Colors.black.withValues(alpha: .68),
-                borderRadius: BorderRadius.circular(6),
+                color: mine
+                    ? accent
+                    : Colors.black.withValues(
+                        alpha: free && !selectable ? .4 : .68,
+                      ),
+                // Pillola come l'etichetta del modulo in alto a sinistra:
+                // erano due sovrimpressioni sullo stesso campo con due raggi
+                // diversi, uno dei quali non apparteneva alla scala del tema.
+                borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 free ? 'Libero' : _shortName(player!),
@@ -1074,7 +1158,11 @@ class _SlotToken extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: mine ? AppTheme.background : Colors.white,
+                  color: mine
+                      ? AppTheme.background
+                      : Colors.white.withValues(
+                          alpha: free && !selectable ? .55 : 1,
+                        ),
                   fontSize: 9,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1132,6 +1220,36 @@ class _SlotToken extends StatelessWidget {
     }
     return player.username.isEmpty ? 'K' : player.username[0].toUpperCase();
   }
+}
+
+/// Fascia da capitano appuntata sul token: la "C" dorata.
+///
+/// Estratta dal token perché l'oro deve arrivare dal token del tema e non da un
+/// esadecimale ripetuto: qui e nella legenda era scritto due volte a mano, ed è
+/// così che due gialli quasi uguali finiscono nella stessa schermata.
+class _CaptainBadge extends StatelessWidget {
+  const _CaptainBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 17,
+    height: 17,
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: AppTheme.gold,
+      shape: BoxShape.circle,
+    ),
+    child: const Text(
+      'C',
+      style: TextStyle(
+        // Il nero dello sfondo dell'app e non `Colors.black`: sull'oro la
+        // differenza non si vede, ma è un colore in meno fuori dal sistema.
+        color: AppTheme.background,
+        fontSize: 9,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 /// Linee del campo: fasce d'erba, cerchio di centrocampo, aree e porte.
