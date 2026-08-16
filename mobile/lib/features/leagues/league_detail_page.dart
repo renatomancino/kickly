@@ -272,11 +272,19 @@ class _LeagueHeader extends StatelessWidget {
         // grandi (26) e non un valore intermedio inventato.
         borderRadius: BorderRadius.circular(AppTheme.radiusXl),
         border: Border.all(color: AppTheme.outline),
-        gradient: LinearGradient(
-          colors: [AppTheme.primary.withValues(alpha: .10), AppTheme.surface],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-        ),
+        // Nessuna velatura verde su questa superficie, ed è una scelta presa
+        // dopo tre tentativi guardati sul simulatore: rampa lineare sulla
+        // diagonale, rampa troncata a metà, alone radiale d'angolo. Tutti e
+        // tre davano lo stesso risultato — un blocco kaki — e il secondo
+        // aggiungeva pure una banda netta che sembrava un artefatto. Non era
+        // una questione di dosaggio ma di colore: `primary` è un giallo-verde
+        // neon, e qualunque quantità di giallo-verde diluita su un fondo
+        // scuro vira all'oliva. Il carattere dell'app è invece nero netto con
+        // il neon a piena intensità su elementi piccoli — qui la lettera del
+        // logo e il codice invito. La testata è già ricca di suo (logo, nome,
+        // luogo, tre pillole, riquadro del codice): lasciarla sulla stessa
+        // superficie pulita di ogni altra card la fa leggere come parte del
+        // sistema invece che come un'eccezione colorata.
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
