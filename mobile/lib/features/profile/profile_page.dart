@@ -457,6 +457,11 @@ class _TabSwitch extends StatelessWidget {
                     child: Center(
                       child: Text(
                         _labels[i],
+                        // Ogni segmento è largo esattamente metà del
+                        // selettore: senza questi due, "Panoramica" con il
+                        // testo di sistema ingrandito esce dalla pillola.
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13.5,
@@ -527,11 +532,18 @@ class _OverviewSection extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    Text(
-                      '${stats.winRate}% win rate',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                    // Flexible e non un Text nudo: lo Spacer si mangia tutto
+                    // lo spazio libero, quindi con il testo ingrandito questa
+                    // etichetta non aveva più dove stare e sfondava la riga.
+                    Flexible(
+                      child: Text(
+                        '${stats.winRate}% win rate',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ],

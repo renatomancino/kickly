@@ -578,19 +578,31 @@ class _HeroMatch extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            '${match.goingCount}/${match.maxPlayers} giocatori',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
+                          // Entrambe Flexible: con lo Spacer in mezzo a
+                          // prendersi lo spazio libero, con il testo di
+                          // sistema ingrandito su uno schermo stretto le due
+                          // etichette non ci stavano più e la riga sfondava.
+                          Flexible(
+                            child: Text(
+                              '${match.goingCount}/${match.maxPlayers} giocatori',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                           const Spacer(),
-                          Text(
-                            '${match.maxPlayers - match.goingCount} posti',
-                            style: const TextStyle(
-                              color: AppTheme.muted,
-                              fontSize: 11,
+                          Flexible(
+                            child: Text(
+                              '${match.maxPlayers - match.goingCount} posti',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppTheme.muted,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                         ],

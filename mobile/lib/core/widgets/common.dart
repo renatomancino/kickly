@@ -133,9 +133,20 @@ class InfoPill extends StatelessWidget {
             Icon(icon, size: 13, color: AppTheme.muted),
             const SizedBox(width: 5),
           ],
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+          // Flexible: la pillola si dimensiona sul contenuto
+          // (MainAxisSize.min), ma quando il genitore la stringe — riga
+          // affollata, schermo piccolo, testo di sistema ingrandito — senza
+          // questo l'etichetta non si accorcia e sfonda la pillola.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),

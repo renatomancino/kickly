@@ -101,12 +101,18 @@ class _MatchesPageState extends State<MatchesPage> {
                       selected: selected,
                       showCheckmark: false,
                       avatar: Icon(entry.value.$2, size: 17),
-                      label: SizedBox(
-                        width: double.infinity,
-                        child: Text(
-                          entry.value.$1,
-                          textAlign: TextAlign.center,
-                        ),
+                      // Niente SizedBox(width: double.infinity) attorno
+                      // all'etichetta: serviva a centrare il testo, ma
+                      // chiedeva al contenuto del chip la larghezza massima
+                      // possibile, e sommata all'icona faceva sfondare il chip
+                      // dal riquadro da mezza riga in cui è incastonato. Il
+                      // chip ora si dimensiona sul testo, che si accorcia da
+                      // solo quando lo spazio non basta.
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      label: Text(
+                        entry.value.$1,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       onSelected: (_) => setState(() => _filter = entry.key),
                     ),
@@ -117,22 +123,27 @@ class _MatchesPageState extends State<MatchesPage> {
           ),
           if (_filter == 'nearby') ...[
             const SizedBox(height: 12),
-            Row(
+            // Wrap e non una Row con lo Spacer: l'etichetta più i tre valori
+            // non entrano in una riga sola su uno schermo da 320pt (né su uno
+            // da 430 con il testo di sistema ingrandito), e con la Row il
+            // risultato erano le barre gialle e nere di overflow. Così i
+            // valori scendono sotto l'etichetta quando serve, e restano in
+            // linea quando c'è spazio.
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Text(
                   'Raggio',
                   style: TextStyle(color: AppTheme.muted, fontSize: 12),
                 ),
-                const Spacer(),
                 ...[25.0, 50.0, 100.0].map(
-                  (radius) => Padding(
-                    padding: const EdgeInsets.only(left: 7),
-                    child: FilterChip(
-                      selected: _radiusKm == radius,
-                      showCheckmark: false,
-                      label: Text('${radius.toInt()} km'),
-                      onSelected: (_) => setState(() => _radiusKm = radius),
-                    ),
+                  (radius) => FilterChip(
+                    selected: _radiusKm == radius,
+                    showCheckmark: false,
+                    label: Text('${radius.toInt()} km'),
+                    onSelected: (_) => setState(() => _radiusKm = radius),
                   ),
                 ),
               ],
