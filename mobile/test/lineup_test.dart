@@ -12,26 +12,30 @@ void main() {
       expect(lineupSideSize('boh'), 5);
     });
 
-    test('ogni modulo dichiarato copre esattamente i giocatori di movimento', () {
-      // Se questa asserzione salta, il campo mostrerebbe slot che il database
-      // rifiuta: private.is_valid_lineup_slot ammette solo indici inferiori
-      // alla dimensione della squadra.
-      for (final entry in lineupFormations.entries) {
-        final side = lineupSideSize(entry.key);
-        for (final formation in entry.value) {
-          final outfield = formation
-              .split('-')
-              .map(int.parse)
-              .reduce((a, b) => a + b);
-          expect(
-            outfield,
-            side - 1,
-            reason: 'Il modulo $formation non copre ${side - 1} '
-                'giocatori di movimento per il formato ${entry.key}',
-          );
+    test(
+      'ogni modulo dichiarato copre esattamente i giocatori di movimento',
+      () {
+        // Se questa asserzione salta, il campo mostrerebbe slot che il database
+        // rifiuta: private.is_valid_lineup_slot ammette solo indici inferiori
+        // alla dimensione della squadra.
+        for (final entry in lineupFormations.entries) {
+          final side = lineupSideSize(entry.key);
+          for (final formation in entry.value) {
+            final outfield = formation
+                .split('-')
+                .map(int.parse)
+                .reduce((a, b) => a + b);
+            expect(
+              outfield,
+              side - 1,
+              reason:
+                  'Il modulo $formation non copre ${side - 1} '
+                  'giocatori di movimento per il formato ${entry.key}',
+            );
+          }
         }
-      }
-    });
+      },
+    );
 
     test('un modulo non valido per il formato ricade sul default', () {
       // '4-3-3' esiste, ma non per il 5v5.

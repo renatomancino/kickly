@@ -71,7 +71,8 @@ class AppTheme {
   /// sfarfallio con il font di sistema all'avvio.
   static const fontFamily = 'Geist';
 
-  static TextTheme _fontOf(TextTheme base) => base.apply(fontFamily: fontFamily);
+  static TextTheme _fontOf(TextTheme base) =>
+      base.apply(fontFamily: fontFamily);
 
   static ThemeData get dark {
     const colors = ColorScheme.dark(
@@ -196,10 +197,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusMd),
           ),
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 15,
-          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -241,9 +239,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(radiusXl),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusXl)),
         ),
       ),
       dialogTheme: DialogThemeData(

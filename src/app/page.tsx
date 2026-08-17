@@ -1,9 +1,30 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BarChart3, CalendarCheck, MapPin, ShieldCheck } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/config/site";
+
+/**
+ * L'UNICA pagina di Kickly che vogliamo in indice, ed e' anche l'unica voce
+ * della sitemap. Titolo, descrizione, OG e Twitter card arrivano gia' dal root
+ * layout: qui aggiungiamo solo le due cose che al root layout non possono stare.
+ *
+ * - `canonical: "/"`: risolto contro il `metadataBase` del root layout. Serve
+ *   perche' la landing e' il bersaglio naturale di link con query di
+ *   tracciamento (utm, ref, fbclid) e di varianti host: senza canonical ogni
+ *   variante e' un URL distinto e il segnale si frammenta su duplicati.
+ * - `robots` esplicito: tecnicamente ridondante (senza direttive un motore
+ *   indicizza comunque), ma qui e' documentazione eseguibile. Ogni altro
+ *   segmento dell'app dichiara noindex; scriverlo in positivo su questa pagina
+ *   rende leggibile a colpo d'occhio che l'indicizzazione e' una whitelist di
+ *   una voce sola, non una dimenticanza.
+ */
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  robots: { index: true, follow: true },
+};
 
 export default function Home() {
   return (

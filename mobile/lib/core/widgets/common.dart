@@ -99,6 +99,61 @@ class PlayerAvatar extends StatelessWidget {
   }
 }
 
+/// Pillola neutra per un metadato secondario (ruolo, formato, piede, livello).
+///
+/// Sta qui e non dentro `features/profile/` perché lo stesso identico elemento
+/// serve in più aree dell'app (player card, elenco leghe): tenerlo nella
+/// feature del profilo avrebbe costretto le altre feature a importarsi fra
+/// loro per riusarlo.
+///
+/// Da non confondere con la pillola verde usata dentro `MatchCard`: quella
+/// segnala uno *stato* (ci sei / lista d'attesa / distanza) e per questo è
+/// tinta del colore del marchio. Questa è deliberatamente neutra, perché
+/// descrive un attributo e non deve competere visivamente con i dati veri
+/// della card.
+class InfoPill extends StatelessWidget {
+  const InfoPill({required this.label, this.icon, super.key});
+
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.outline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: AppTheme.muted),
+            const SizedBox(width: 5),
+          ],
+          // Flexible: la pillola si dimensiona sul contenuto
+          // (MainAxisSize.min), ma quando il genitore la stringe — riga
+          // affollata, schermo piccolo, testo di sistema ingrandito — senza
+          // questo l'etichetta non si accorcia e sfonda la pillola.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Tessera statistica della dashboard.
 ///
 /// Con [highlight] assume il verde pieno del marchio: serve per l'Overall, che
@@ -254,9 +309,10 @@ class _KicklySkeletonState extends State<KicklySkeleton>
     return FadeTransition(
       // Pulsazione lenta fra due opacità: comunica attesa senza il rumore di
       // uno shimmer che scorre.
-      opacity: Tween<double>(begin: .45, end: .9).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-      ),
+      opacity: Tween<double>(
+        begin: .45,
+        end: .9,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
       child: Container(
         width: widget.width,
         height: widget.height,
@@ -685,6 +741,69 @@ String friendlyError(Object error) {
   }
   if (text.contains('authentication_required')) {
     return 'Sessione scaduta: accedi di nuovo.';
+  }
+
+  // Chiusura partita: codici sollevati da finalize_match. Prima di questi
+  // fix ogni errore qui cadeva nel messaggio generico in fondo, il momento
+  // peggiore per un admin che sta chiudendo una partita a mano.
+  if (text.contains('team_a_goals_mismatch') ||
+      text.contains('team_b_goals_mismatch')) {
+    return 'I gol assegnati ai giocatori non corrispondono al punteggio della squadra. Controlla i gol inseriti.';
+  }
+  if (text.contains('invalid_player_totals')) {
+    return 'I gol o gli assist inseriti per un giocatore non sono validi.';
+  }
+  if (text.contains('player_totals_required')) {
+    return 'Inserisci gol e assist per tutti i giocatori confermati.';
+  }
+  if (text.contains('duplicate_team_player')) {
+    return 'Un giocatore risulta in entrambe le squadre: controlla la formazione.';
+  }
+  if (text.contains('teams_required')) {
+    return 'Assegna tutti i giocatori confermati a una squadra prima di chiudere la partita.';
+  }
+  if (text.contains('all_confirmed_players_required')) {
+    return 'Mancano dei giocatori confermati nelle squadre.';
+  }
+  if (text.contains('team_match_mismatch')) {
+    return 'Questa squadra non appartiene a questa partita.';
+  }
+  if (text.contains('invalid_score')) {
+    return 'Il punteggio inserito non è valido.';
+  }
+
+  // Iscrizioni e capienza: set_match_admin_state, set_match_response,
+  // create_match/update_match.
+  if (text.contains('registrations_closed')) {
+    return 'Le iscrizioni a questa partita sono chiuse.';
+  }
+  if (text.contains('max_below_confirmed')) {
+    return 'Non puoi impostare un numero massimo di giocatori inferiore alle presenze già confermate.';
+  }
+
+  // Votazione MVP: cast_mvp_vote, finalize_match_mvp.
+  if (text.contains('mvp_voting_closed')) {
+    return 'La votazione per l’MVP è chiusa.';
+  }
+  if (text.contains('mvp_voting_open')) {
+    return 'La votazione per l’MVP è ancora aperta.';
+  }
+  if (text.contains('cannot_vote_self')) {
+    return 'Non puoi votare te stesso come MVP.';
+  }
+  if (text.contains('invalid_mvp_candidate')) {
+    return 'Questo giocatore non può essere votato come MVP.';
+  }
+  if (text.contains('no_mvp_candidates')) {
+    return 'Nessun voto ricevuto: non è stato possibile eleggere un MVP.';
+  }
+
+  // Permessi generici sulle RPC di gestione partita/lega.
+  if (text.contains('admin_required')) {
+    return 'Solo un admin della lega può eseguire questa azione.';
+  }
+  if (text.contains('membership_required')) {
+    return 'Devi essere membro della lega per eseguire questa azione.';
   }
 
   // Volutamente in fondo: 'username' è una parola comune e prima intercettava

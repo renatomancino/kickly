@@ -107,14 +107,45 @@ class _KicklyAppState extends State<KicklyApp> {
         path: '/onboarding',
         builder: (_, _) => const ProfileEditorPage(onboarding: true),
       ),
-      ShellRoute(
-        builder: (context, state, child) =>
-            AppShell(location: state.uri.path, child: child),
-        routes: [
-          GoRoute(path: '/dashboard', builder: (_, _) => const DashboardPage()),
-          GoRoute(path: '/leagues', builder: (_, _) => const LeaguesPage()),
-          GoRoute(path: '/matches', builder: (_, _) => const MatchesPage()),
-          GoRoute(path: '/profile', builder: (_, _) => const ProfilePage()),
+      // StatefulShellRoute (non ShellRoute) tiene un Navigator/stack separato
+      // per ognuna delle 4 tab e le mantiene tutte vive in un IndexedStack:
+      // cambiare tab è uno swap istantaneo, senza transizione di pagina né
+      // ricostruzione dello State. Con il vecchio ShellRoute ogni tap sulla
+      // bottom bar era una normale navigazione (route diversa -> pagina
+      // ricreata da zero, FutureBuilder che rifetcha, scroll perso, e
+      // un'animazione di push/pop che sulle tab non ha senso) — quella era la
+      // causa della sensazione di "pagina vecchia che resta lì" segnalata
+      // dall'utente durante il cambio tab.
+      // Rami dichiarati nello stesso ordine visivo della bottom bar (Home,
+      // Partite, Leghe, Profilo): l'indice del branch coincide direttamente
+      // con l'indice mostrato in _KicklyBottomBar, niente più remap a mano.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            AppShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/dashboard',
+                builder: (_, _) => const DashboardPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/matches', builder: (_, _) => const MatchesPage()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/leagues', builder: (_, _) => const LeaguesPage()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/profile', builder: (_, _) => const ProfilePage()),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -233,13 +264,24 @@ class SplashPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Questa è la schermata Flutter mostrata SUBITO dopo lo splash nativo
+    // (flutter_native_splash, vedi pubspec.yaml), mentre AppState verifica
+    // se c'è una sessione Supabase valida. Lo splash nativo mostra già
+    // KicklyMark su AppTheme.background: qui replichiamo esattamente lo
+    // stesso sfondo e lo stesso marchio (invece di un semplice spinner
+    // generico) così il passaggio nativo -> Flutter è invisibile, senza lo
+    // scatto di stile che si avrebbe con un design diverso.
     return const Scaffold(
+      backgroundColor: AppTheme.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             KicklyMark(size: 72),
             SizedBox(height: 22),
+            // Nessun colore esplicito: il tema (AppTheme.dark) imposta già
+            // primary come colore di default dello spinner, coerente con
+            // l'accento verde del marchio.
             CircularProgressIndicator(),
           ],
         ),

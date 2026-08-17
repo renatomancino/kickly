@@ -1727,7 +1727,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       _onboardingComplete = false;
       final channel = _notificationChannel;
-      if (channel != null) channel.unsubscribe();
+      // Fire-and-forget voluto: chiudere il canale realtime parla con il socket
+      // e al logout la rete può già essere caduta. Aspettarla bloccherebbe il
+      // ritorno alla schermata di login dietro un timeout; il riferimento
+      // locale + `_notificationChannel = null` qui sotto garantiscono comunque
+      // che nessuno riusi il canale mentre si smonta.
+      if (channel != null) unawaited(channel.unsubscribe());
       _notificationChannel = null;
       unawaited(stopNotificationPolling());
     }

@@ -31,24 +31,24 @@ dependencies:
   flutter:
     sdk: flutter
   cached_network_image: 3.4.1
-  cupertino_icons: 1.0.8
+  cupertino_icons: 1.0.9
   go_router: 17.5.0
   image_picker: 1.2.3
   http: 1.6.0
   intl: 0.20.3
-  supabase_flutter: 2.17.1
+  supabase_flutter: 2.17.2
   url_launcher: 6.3.2
   # Banner di sistema veri (non SnackBar) e canale notifiche Android brandizzato.
   flutter_local_notifications: 19.4.2
   # Task periodico che controlla le notifiche non lette ad app chiusa, così il
   # telefono avvisa anche senza un canale push FCM/APNs configurato.
-  workmanager: 0.9.0+3
+  workmanager: 0.10.7
   # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
   # che gira in un isolate separato senza accesso allo stato dell'app.
   shared_preferences: 2.5.5
   # Keychain (iOS) / Keystore (Android) per i token di sessione Supabase: senza
   # questo finiscono in SharedPreferences/NSUserDefaults in chiaro.
-  flutter_secure_storage: 11.0.0
+  flutter_secure_storage: 10.3.1
   # Sign in with Google, flusso nativo con ID token verificato da Supabase.
   google_sign_in: 7.2.0
   # Sign in with Apple, obbligatorio su iOS se si offre un altro login social.
@@ -67,6 +67,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -143,3 +144,36 @@ flutter_launcher_icons:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Splash screen nativo (Android/iOS), generato da `dart run
+# flutter_native_splash:create`. Sostituisce lo sfondo bianco/nero di
+# default che il sistema operativo mostra PRIMA che il motore Flutter sia
+# pronto a disegnare il primo frame: senza questo pacchetto non c'è alcun
+# modo di brandizzare quella schermata, perché a quel punto Dart non gira
+# ancora (è codice nativo — storyboard su iOS, drawable/tema su Android).
+flutter_native_splash:
+  # Stesso colore di `AppTheme.background` (lib/core/theme/app_theme.dart),
+  # così la schermata nativa e la prima schermata Flutter (SplashPage) sono
+  # indistinguibili e la transizione non "scatta".
+  color: "#0B0D0C"
+  # Stessa icona usata da flutter_launcher_icons qui sopra: ha già lo sfondo
+  # scuro arrotondato incorporato, quindi funziona bene sia da sola (qui)
+  # sia ritagliata in un cerchio (vedi android_12 sotto).
+  image: assets/images/kickly-icon.png
+  # Nasconde la status/notification bar durante lo splash: su Android
+  # evita che una barra di sistema "anonima" stoni con lo sfondo scuro
+  # brandizzato; su iOS è già nascosta di default.
+  fullscreen: true
+
+  # Android 12+ ha un meccanismo di splash screen diverso (SplashScreen API
+  # di sistema, non più storyboard/drawable custom) e va configurato a
+  # parte: senza questa sezione, su Android 12+ verrebbe mostrata solo
+  # l'icona di lancio su sfondo di sistema, ignorando `color`/`image` sopra.
+  android_12:
+    color: "#0B0D0C"
+    image: assets/images/kickly-icon.png
+    # Stesso colore dello sfondo generale: l'icona ha già i bordi
+    # arrotondati e lo sfondo scuro disegnati dentro l'immagine, quindi lo
+    # sfondo del cerchio Android 12 deve solo "sparire" dietro di essa
+    # invece di introdurre un colore diverso attorno.
+    icon_background_color: "#0B0D0C"

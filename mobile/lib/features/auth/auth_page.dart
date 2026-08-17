@@ -83,25 +83,29 @@ class _AuthPageState extends State<AuthPage> {
             password: _passwordController.text,
           );
           if (scope.repository.currentUserId == null) {
-            setState(
-              () =>
-                  _message = 'Controlla la tua email per confermare l’account.',
-            );
+            if (mounted) {
+              setState(
+                () => _message =
+                    'Controlla la tua email per confermare l’account.',
+              );
+            }
           } else {
             await scope.appState.refreshSession();
           }
         case AuthVariant.forgot:
           await scope.repository.resetPassword(_emailController.text);
-          setState(
-            () => _message =
-                'Se l’account esiste, riceverai un link di recupero.',
-          );
+          if (mounted) {
+            setState(
+              () => _message =
+                  'Se l’account esiste, riceverai un link di recupero.',
+            );
+          }
         case AuthVariant.updatePassword:
           await scope.repository.updatePassword(_passwordController.text);
           if (mounted) context.go('/dashboard');
       }
     } catch (error) {
-      setState(() => _message = friendlyError(error));
+      if (mounted) setState(() => _message = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -122,15 +126,15 @@ class _AuthPageState extends State<AuthPage> {
     } on GoogleSignInException catch (error) {
       // L'utente ha chiuso il selettore account: non è un errore da
       // mostrare, è la scelta di non accedere.
-      if (error.code != GoogleSignInExceptionCode.canceled) {
+      if (error.code != GoogleSignInExceptionCode.canceled && mounted) {
         setState(() => _message = friendlyError(error));
       }
     } on SignInWithAppleAuthorizationException catch (error) {
-      if (error.code != AuthorizationErrorCode.canceled) {
+      if (error.code != AuthorizationErrorCode.canceled && mounted) {
         setState(() => _message = friendlyError(error));
       }
     } catch (error) {
-      setState(() => _message = friendlyError(error));
+      if (mounted) setState(() => _message = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

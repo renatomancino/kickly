@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../data/models.dart';
+import '../theme/app_theme.dart';
 
 /// Mostra le notifiche Kickly come banner di sistema.
 ///
@@ -54,7 +54,11 @@ class NotificationService {
     if (_ready) return;
 
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      // Icona di stato dedicata (drawable/ic_stat_kickly, silhouette bianca
+      // trasparente della "K"), non l'icona a colori dell'app: Android
+      // pretende un monocromatico per la status bar e sagoma da solo
+      // qualunque altra cosa gli si passi, di norma male.
+      android: AndroidInitializationSettings('ic_stat_kickly'),
       iOS: DarwinInitializationSettings(
         // I permessi li chiediamo dopo il login, non al primo avvio: chiederli
         // sulla schermata di accesso significa quasi sempre un "non consentire".
@@ -105,7 +109,11 @@ class NotificationService {
           IOSFlutterLocalNotificationsPlugin
         >();
     if (ios != null) {
-      return await ios.requestPermissions(alert: true, badge: true, sound: true) ??
+      return await ios.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
           false;
     }
     return false;
@@ -169,17 +177,29 @@ class NotificationService {
           _channel.id,
           _channel.name,
           channelDescription: _channel.description,
+          // `importance`/`priority` duplicano quanto già impostato sul canale:
+          // dal Oreo (API 26) in poi è il canale a comandare, ma questi due
+          // campi restano l'unico modo per farlo funzionare anche sulle
+          // versioni di Android precedenti, dove i canali non esistono.
+          // Restiamo su `high` (banner + suono) e non `max`: nessuna delle
+          // notifiche Kickly è così urgente da giustificare l'interruzione
+          // "a tutto schermo" che Android riserva alla priorità massima.
           importance: Importance.high,
           priority: Priority.high,
-          // Verde Kickly, coerente con il colore già dichiarato nel manifest.
-          color: const Color(0xFFC7FF3D),
+          // Verde Kickly: preso da AppTheme invece di ripetere l'esadecimale,
+          // così se il brand color cambia non resta disallineato qui.
+          color: AppTheme.primary,
           // Il corpo può superare la riga singola: così resta leggibile aperto.
           styleInformation: BigTextStyleInformation(body),
         ),
-        iOS: const DarwinNotificationDetails(
+        iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          // Raggruppa i banner Kickly in un unico thread nel Centro
+          // Notifiche di iOS invece di lasciarli sparsi: stesso effetto del
+          // canale unico su Android, ottenuto qui riusando lo stesso id.
+          threadIdentifier: _channel.id,
         ),
       ),
       payload: link,
@@ -191,8 +211,7 @@ class NotificationService {
 ///
 /// Android richiede un int: usando sempre lo stesso id per la stessa notifica
 /// il sistema la sostituisce invece di impilarne due copie.
-int notificationIdOf(String uuid) =>
-    uuid.hashCode & 0x7fffffff;
+int notificationIdOf(String uuid) => uuid.hashCode & 0x7fffffff;
 
 /// Gestore del tap su notifica quando l'app non è in esecuzione.
 ///

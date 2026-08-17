@@ -73,6 +73,28 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
     super.dispose();
   }
 
+  // --- Copy differenziato onboarding / modifica profilo -------------------
+  //
+  // L'onboarding è il primo vero contatto con l'app dopo la registrazione
+  // (come login/signup in auth_page.dart), quindi merita un tono più caldo e
+  // motivante. La modifica profilo la vede invece un utente già attivo, che
+  // vuole solo aggiornare dei dati: lì il testo resta pratico e diretto.
+
+  String get _eyebrow =>
+      widget.onboarding ? 'BENVENUTO IN KICKLY' : 'LA TUA PLAYER CARD';
+
+  String get _headline =>
+      widget.onboarding ? 'Che giocatore sei?' : 'Profilo giocatore';
+
+  String get _subtitle => widget.onboarding
+      ? 'Bastano due minuti: raccontaci come giochi e prepariamo subito '
+            'la tua player card, pronta per la prossima partita.'
+      : 'Le stesse informazioni mostrate nella PWA, aggiornate anche nelle '
+            'leghe e nelle formazioni.';
+
+  String get _submitLabel =>
+      widget.onboarding ? 'Scendi in campo' : 'Salva modifiche';
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -132,9 +154,9 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
-              const Text(
-                'LA TUA PLAYER CARD',
-                style: TextStyle(
+              Text(
+                _eyebrow,
+                style: const TextStyle(
                   color: AppTheme.primary,
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
@@ -143,78 +165,133 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                widget.onboarding ? 'Completa il profilo' : 'Profilo giocatore',
+                _headline,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 7),
-              const Text(
-                'Le stesse informazioni mostrate nella PWA, aggiornate anche nelle leghe e nelle formazioni.',
-                style: TextStyle(color: AppTheme.muted, height: 1.45),
+              Text(
+                _subtitle,
+                style: const TextStyle(color: AppTheme.muted, height: 1.45),
               ),
-              const SizedBox(height: 24),
-              Card(
+              const SizedBox(height: 8),
+              // Avatar grande e centrato con il badge fotocamera in basso a
+              // destra, come le schermate di modifica profilo di iOS (Foto,
+              // Contatti): prima era una riga di Card con un cerchio piccolo
+              // a sinistra, che sembrava un'impostazione qualunque invece
+              // che il ritratto del giocatore.
+              Center(
                 child: InkWell(
                   onTap: _pickAvatar,
-                  borderRadius: BorderRadius.circular(22),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 30,
+                  customBorder: const CircleBorder(),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.fromBorderSide(
+                            BorderSide(
+                              color: AppTheme.outlineSolid,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 44,
+                          backgroundColor: AppTheme.surfaceHigh,
                           backgroundImage: _avatarBytes == null
                               ? null
                               : MemoryImage(_avatarBytes!),
                           child: _avatarBytes == null
-                              ? const Icon(Icons.camera_alt_outlined)
+                              ? const Icon(
+                                  Icons.person_outline,
+                                  size: 34,
+                                  color: AppTheme.muted,
+                                )
                               : null,
                         ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Foto profilo',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'JPG, PNG o WebP · max 5 MB',
-                                style: TextStyle(
-                                  color: AppTheme.muted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppTheme.background,
+                              width: 3,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            size: 15,
+                            color: AppTheme.onPrimary,
                           ),
                         ),
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
+              // "Facoltativa" in testa: né il form né il salvataggio la
+              // richiedono, e specie in onboarding va detto subito per non
+              // dare l'idea di un altro passaggio obbligato.
+              const Center(
+                child: Text(
+                  'Facoltativa · JPG, PNG o WebP, max 5 MB',
+                  style: TextStyle(color: AppTheme.muted, fontSize: 11.5),
+                ),
+              ),
+              const SizedBox(height: 22),
               Form(
                 key: _formKey,
                 child: Column(
                   children: [
                     Row(
                       children: [
-                        Expanded(child: _field(_firstName, 'Nome')),
+                        Expanded(
+                          child: _field(
+                            _firstName,
+                            'Nome',
+                            // Messaggio specifico per campo invece del
+                            // generico "Campo obbligatorio": dice subito
+                            // cosa manca e quanto, senza dover indovinare.
+                            validator: (v) => (v?.trim().length ?? 0) < 2
+                                ? 'Il nome deve avere almeno 2 caratteri.'
+                                : null,
+                          ),
+                        ),
                         const SizedBox(width: 12),
-                        Expanded(child: _field(_lastName, 'Cognome')),
+                        Expanded(
+                          child: _field(
+                            _lastName,
+                            'Cognome',
+                            validator: (v) => (v?.trim().length ?? 0) < 2
+                                ? 'Il cognome deve avere almeno 2 caratteri.'
+                                : null,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    _field(_username, 'Username', prefix: const Text('@')),
+                    _field(
+                      _username,
+                      'Username',
+                      prefix: const Text('@'),
+                      validator: _usernameValidator,
+                    ),
                     const SizedBox(height: 14),
                     _field(
                       _birthDate,
                       'Data di nascita',
-                      hint: 'AAAA-MM-GG',
-                      optional: true,
+                      hint: 'AAAA-MM-GG, es. 1998-04-23 (facoltativa)',
+                      validator: _birthDateValidator,
                     ),
                     const SizedBox(height: 14),
                     ItalianMunicipalityField(
@@ -297,11 +374,7 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Text(
-                                widget.onboarding
-                                    ? 'Entra in Kickly'
-                                    : 'Salva modifiche',
-                              ),
+                            : Text(_submitLabel),
                       ),
                     ),
                   ],
@@ -319,7 +392,11 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
     String label, {
     Widget? prefix,
     String? hint,
-    bool optional = false,
+    // Ogni campo passa il proprio validatore: prima era un unico controllo
+    // generico "almeno 2 caratteri" condiviso da nome, cognome e username,
+    // che per lo username non bastava (vedi _usernameValidator) e per la
+    // data di nascita non c'era affatto.
+    required String? Function(String?) validator,
   }) => TextFormField(
     controller: controller,
     decoration: InputDecoration(
@@ -327,10 +404,41 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
       prefixIcon: prefix == null ? null : Center(widthFactor: 1, child: prefix),
       hintText: hint,
     ),
-    validator: optional
-        ? null
-        : (v) => (v?.trim().length ?? 0) < 2 ? 'Almeno 2 caratteri' : null,
+    validator: validator,
   );
+
+  /// Username: stesse regole della web app (`src/features/profile/schema.ts`)
+  /// — almeno 3 caratteri, solo lettere/numeri/underscore. Il database ha
+  /// solo un vincolo di unicità, non di formato, quindi senza questo
+  /// controllo lato client un valore "non valido" per la PWA veniva
+  /// comunque salvato dal mobile senza nessun avviso.
+  String? _usernameValidator(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.length < 3) return 'Lo username deve avere almeno 3 caratteri.';
+    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(trimmed)) {
+      return 'Usa solo lettere, numeri e underscore (es. mario_rossi).';
+    }
+    return null;
+  }
+
+  /// Data di nascita: campo facoltativo, quindi vuoto va sempre bene. Se
+  /// invece è compilato, verifichiamo che sia una vera data nel formato
+  /// AAAA-MM-GG: prima un valore scritto male (es. "23/04/1998") non veniva
+  /// intercettato qui e l'unico segnale d'errore sarebbe arrivato, criptico,
+  /// dal server al salvataggio.
+  String? _birthDateValidator(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return null;
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed)) {
+      return 'Usa il formato AAAA-MM-GG, ad esempio 1998-04-23.';
+    }
+    final parsed = DateTime.tryParse(trimmed);
+    if (parsed == null || parsed.isAfter(DateTime.now())) {
+      return 'Inserisci una data di nascita valida.';
+    }
+    return null;
+  }
+
   Widget _select(
     String label,
     String value,
@@ -368,12 +476,11 @@ class _ProfileEditorPageState extends State<ProfileEditorPage> {
     );
     if (image == null) return;
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
     if (bytes.length > 5 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La foto deve pesare meno di 5 MB.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La foto deve pesare meno di 5 MB.')),
+      );
       return;
     }
     setState(() {

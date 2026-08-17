@@ -1,6 +1,9 @@
-import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
+// `Uint8List` arriva già da qui: `dart:typed_data` diretto non serve più
+// e l'analyzer lo segnala come import ridondante.
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +14,16 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
 
+/// Creazione e modifica di una partita.
+///
+/// Regola dell'accento seguita in tutta la pagina: il verde del marchio si
+/// accende solo su **la scelta che hai fatto** (formato, visibilità) e sul
+/// **bottone che pubblica**. Prima era acceso anche su tutti e sei i titolini
+/// di sezione, sul riquadro della data, sulla quota a persona e sulle due
+/// caselle foto: con dieci punti verdi in una schermata sola non risaltava più
+/// niente, e il bottone che chiude il lavoro spariva in mezzo agli altri.
+/// Dove serviva enfasi senza colore si usa il corpo del testo (l'ora della
+/// partita è la cosa più grande della pagina, non la più verde).
 class MatchFormPage extends StatefulWidget {
   const MatchFormPage({super.key, this.initialLeagueId, this.matchId});
 
@@ -112,7 +125,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_startsAt),
     );
-    if (time == null) return;
+    if (time == null || !mounted) return;
     setState(
       () => _startsAt = DateTime(
         date.year,
@@ -125,11 +138,24 @@ class _MatchFormPageState extends State<MatchFormPage> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate() ||
-        _leagueId == null ||
-        _place == null) {
+    if (!_formKey.currentState!.validate()) return;
+    // Comune e lega non sono TextFormField, quindi il Form non li valida e
+    // prima il tap sul bottone finiva in un `return` muto: nessun errore,
+    // nessun caricamento, apparentemente nulla di rotto. Stesso blocco di
+    // prima, ma adesso dice cosa manca nel riquadro sopra al bottone.
+    if (_place == null || _leagueId == null) {
+      setState(
+        () => _error = _place == null
+            ? 'Scegli il comune del campo: serve per mostrare la partita a chi è in zona.'
+            : 'Scegli la lega in cui creare la partita.',
+      );
       return;
     }
+    // Piccolo riscontro tattile alla conferma di un form importante come
+    // questo (crea o modifica una partita), non su ogni tap generico.
+    // `unawaited`: è un effetto collaterale sul motore aptico, attenderlo
+    // ritarderebbe geocoding e salvataggio senza alcun beneficio.
+    unawaited(HapticFeedback.lightImpact());
     setState(() {
       _loading = true;
       _error = null;
@@ -206,7 +232,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
       }
       if (mounted) context.go('/matches/$matchId');
     } catch (error) {
-      setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -228,12 +254,11 @@ class _MatchFormPageState extends State<MatchFormPage> {
     );
     if (image == null) return;
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
     if (bytes.length > 8 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La foto deve pesare meno di 8 MB.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La foto deve pesare meno di 8 MB.')),
+      );
       return;
     }
     final extension = image.name.split('.').last;
@@ -276,11 +301,22 @@ class _MatchFormPageState extends State<MatchFormPage> {
                 .where((league) => league.canManage)
                 .toList();
             if (managed.isEmpty) {
-              return const PageFrame(
+              // Stato vuoto con una via d'uscita: dire soltanto "serve una
+              // lega" lascia l'utente in un vicolo cieco, mentre da qui il
+              // passo successivo è sempre lo stesso — crearne una.
+              return PageFrame(
                 child: EmptyState(
                   icon: Icons.admin_panel_settings_outlined,
-                  title: 'Serve una lega',
-                  body: 'Puoi creare partite solo nelle leghe in cui sei owner o admin.',
+                  title: 'Prima serve una lega',
+                  body:
+                      'Le partite si organizzano dentro una lega, e puoi farlo '
+                      'solo dove sei proprietario o admin. Creane una: ci '
+                      'vuole un minuto e gli inviti partono subito.',
+                  action: FilledButton.icon(
+                    onPressed: () => context.push('/leagues/new'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Crea una lega'),
+                  ),
                 ),
               );
             }
@@ -304,6 +340,22 @@ class _MatchFormPageState extends State<MatchFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Occhiello + titolo + sottotitolo, come negli altri
+                      // moduli dell'app: l'occhiello dice dove sei, il titolo
+                      // cosa stai per fare, il sottotitolo cosa succede dopo
+                      // aver confermato.
+                      Text(
+                        widget.matchId == null
+                            ? 'NUOVA PARTITA'
+                            : 'MODIFICA PARTITA',
+                        style: const TextStyle(
+                          color: AppTheme.muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Text(
                         widget.matchId == null
                             ? 'Organizza il match'
@@ -311,9 +363,17 @@ class _MatchFormPageState extends State<MatchFormPage> {
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 7),
-                      const Text(
-                        'Tutti i membri riceveranno l’aggiornamento in Kickly.',
-                        style: TextStyle(color: AppTheme.muted),
+                      Text(
+                        widget.matchId == null
+                            ? 'Data, campo e formato: appena pubblichi, i membri '
+                                  'della lega la vedono e possono dare la '
+                                  'disponibilità.'
+                            : 'Le modifiche arrivano subito a chi si è già '
+                                  'iscritto, in app e nella PWA.',
+                        style: const TextStyle(
+                          color: AppTheme.muted,
+                          height: 1.45,
+                        ),
                       ),
                       const SizedBox(height: 22),
 
@@ -324,14 +384,22 @@ class _MatchFormPageState extends State<MatchFormPage> {
                         children: [
                           // La tendina lega compare solo se c'e davvero una
                           // scelta da fare: con una lega sola era un campo
-                          // inerte in cima al modulo.
+                          // inerte in cima al modulo. Al suo posto però resta
+                          // scritto dove finirà la partita, altrimenti con
+                          // più leghe in giro non si sa in quale si sta
+                          // pubblicando.
                           if (managed.length > 1) ...[
                             DropdownButtonFormField<String>(
                               initialValue: _leagueId,
                               isExpanded: true,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Lega',
-                                prefixIcon: Icon(Icons.shield_outlined),
+                                prefixIcon: const Icon(Icons.shield_outlined),
+                                // In modifica la tendina è spenta di
+                                // proposito (una partita non trasloca da una
+                                // lega all'altra): senza una riga che lo
+                                // dica, sembra solo un campo rotto.
+                                helperText: widget.matchId == null ? null : 'Una partita non si può spostare in un\'altra lega.',
                               ),
                               items: managed
                                   .map(
@@ -339,6 +407,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
                                       value: league.id,
                                       child: Text(
                                         league.name,
+                                        maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -347,6 +416,13 @@ class _MatchFormPageState extends State<MatchFormPage> {
                               onChanged: widget.matchId == null
                                   ? (value) => setState(() => _leagueId = value)
                                   : null,
+                            ),
+                            const SizedBox(height: 14),
+                          ] else ...[
+                            _HelperLine(
+                              icon: Icons.shield_outlined,
+                              text: 'Nella lega ${selectedLeague.name}',
+                              maxLines: 2,
                             ),
                             const SizedBox(height: 14),
                           ],
@@ -374,65 +450,91 @@ class _MatchFormPageState extends State<MatchFormPage> {
                       const SizedBox(height: 14),
 
                       // 2. Quando: la data merita piu peso di una riga di
-                      // testo, e il primo dato che un giocatore cerca.
+                      // testo, e il primo dato che un giocatore cerca. Il peso
+                      // però glielo dà il corpo del testo (l'ora è la cosa più
+                      // grande della pagina), non il colore: il riquadro era
+                      // verde su verde e si prendeva l'accento che serve al
+                      // bottone di pubblicazione.
                       _FormSection(
                         eyebrow: 'Quando',
                         icon: Icons.event,
                         children: [
-                          InkWell(
-                            onTap: _pickDateTime,
-                            borderRadius: BorderRadius.circular(
-                              AppTheme.radiusMd,
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: .08),
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusMd,
-                                ),
-                                border: Border.all(
-                                  color: AppTheme.primary.withValues(alpha: .3),
-                                ),
+                          Material(
+                            color: AppTheme.surfaceHigh,
+                            clipBehavior: Clip.antiAlias,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMd,
                               ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          DateFormat(
-                                            'EEEE d MMMM y',
-                                            'it_IT',
-                                          ).format(_startsAt),
-                                          style: const TextStyle(
-                                            color: AppTheme.muted,
-                                            fontSize: 12.5,
+                              side: const BorderSide(color: AppTheme.outline),
+                            ),
+                            child: InkWell(
+                              onTap: _pickDateTime,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            DateFormat(
+                                              'EEEE d MMMM y',
+                                              'it_IT',
+                                            ).format(_startsAt),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppTheme.muted,
+                                              fontSize: 12.5,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          DateFormat('HH:mm').format(_startsAt),
-                                          style: const TextStyle(
-                                            fontSize: 26,
-                                            height: 1.1,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: -1,
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            DateFormat('HH:mm')
+                                                .format(_startsAt),
+                                            style: const TextStyle(
+                                              fontSize: 26,
+                                              height: 1.1,
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: -1,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  const Icon(
-                                    Icons.edit_calendar_outlined,
-                                    color: AppTheme.primary,
-                                  ),
-                                ],
+                                    const SizedBox(width: 12),
+                                    // Il riquadro è tutto cliccabile, ma
+                                    // l'icona resta l'unico segnale esplicito
+                                    // che di qui si apre il calendario.
+                                    const Icon(
+                                      Icons.edit_calendar_outlined,
+                                      color: AppTheme.muted,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
+                          const SizedBox(height: 9),
+                          // Avviso solo quando serve davvero: capita in
+                          // modifica, riaprendo una partita già giocata, e
+                          // salvare senza accorgersene la rimetterebbe in
+                          // calendario con una data nel passato.
+                          if (_startsAt.isBefore(DateTime.now()))
+                            const _HelperLine(
+                              icon: Icons.history,
+                              text:
+                                  'Questa data è già passata: la partita non '
+                                  'comparirà fra quelle in programma.',
+                            )
+                          else
+                            const _HelperLine(
+                              icon: Icons.touch_app_outlined,
+                              text: 'Tocca per cambiare giorno e orario.',
+                            ),
                         ],
                       ),
                       const SizedBox(height: 14),
@@ -477,8 +579,17 @@ class _MatchFormPageState extends State<MatchFormPage> {
                             controller: _venuePhone,
                             keyboardType: TextInputType.phone,
                             decoration: const InputDecoration(
-                              labelText: 'Telefono del campo',
-                              helperText: 'Serve ai partecipanti per prenotare il campo.',
+                              labelText: 'Telefono della struttura',
+                              // Il campo è obbligatorio (lo dice il
+                              // validatore): meglio scriverlo prima, invece
+                              // di far scoprire il vincolo con un errore
+                              // rosso dopo il tap su "Pubblica".
+                              helperText:
+                                  'Obbligatorio: serve ai partecipanti per '
+                                  'confermare o disdire il campo.',
+                              // Due righe di aiuto stanno larghe quanto il
+                              // campo invece di essere troncate a una sola.
+                              helperMaxLines: 2,
                               prefixIcon: Icon(Icons.phone_outlined),
                             ),
                             validator: (value) {
@@ -509,28 +620,37 @@ class _MatchFormPageState extends State<MatchFormPage> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              for (final value in const [
-                                '5v5',
-                                '7v7',
-                                '8v8',
-                                '10v10',
-                                '11v11',
-                              ])
-                                _SelectableChip(
+                              for (final value in _formats)
+                                _ChoicePill(
                                   label: value.replaceAll('v', ' vs '),
                                   selected: _format == value,
                                   onTap: () => _setFormat(value),
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 9),
+                          // Cambiare formato riscrive i giocatori totali qui
+                          // sotto (`_setFormat`): è un effetto collaterale
+                          // che sorprende chi aveva appena messo il suo
+                          // numero, quindi va annunciato prima.
+                          const _HelperLine(
+                            icon: Icons.info_outline,
+                            text:
+                                'Scegliendo il formato ricalcoliamo i giocatori '
+                                'totali qui sotto: se ti serve un altro numero, '
+                                'correggilo dopo.',
+                          ),
+                          const SizedBox(height: 18),
                           TextFormField(
                             initialValue: '$_maxPlayers',
                             key: ValueKey(_maxPlayers),
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
                               labelText: 'Giocatori totali',
-                              helperText: 'Precompilato dal formato, modificalo se serve.',
+                              helperText:
+                                  'Raggiunto questo numero le adesioni finiscono '
+                                  'in lista d\'attesa.',
+                              helperMaxLines: 2,
                               prefixIcon: Icon(Icons.person_add_alt_outlined),
                             ),
                             onChanged: (value) => setState(
@@ -538,7 +658,7 @@ class _MatchFormPageState extends State<MatchFormPage> {
                                   int.tryParse(value) ?? _maxPlayers,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 18),
                           const _FieldLabel('Chi la può vedere'),
                           const SizedBox(height: 9),
                           _VisibilityPicker(
@@ -563,41 +683,60 @@ class _MatchFormPageState extends State<MatchFormPage> {
                             decoration: const InputDecoration(
                               labelText: 'Costo totale del campo',
                               hintText: 'Opzionale',
+                              helperText:
+                                  'Lascialo vuoto se il campo è già pagato: '
+                                  'nessuno vedrà una quota da versare.',
+                              helperMaxLines: 2,
                               prefixText: '€ ',
                             ),
                             onChanged: (_) => setState(() {}),
                           ),
                           if (_quotaPerPlayer != null) ...[
                             const SizedBox(height: 12),
+                            // Riquadro neutro, non verde: è un calcolo fatto
+                            // da noi, non una scelta dell'utente né l'azione
+                            // finale. Il numero risalta perché è grosso e
+                            // bianco su grigio, senza rubare l'accento.
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: .1),
+                                color: AppTheme.surfaceHigh,
                                 borderRadius: BorderRadius.circular(
                                   AppTheme.radiusMd,
                                 ),
-                                border: Border.all(
-                                  color: AppTheme.primary.withValues(
-                                    alpha: .35,
-                                  ),
-                                ),
+                                border: Border.all(color: AppTheme.outline),
                               ),
                               child: Row(
                                 children: [
                                   const Icon(
                                     Icons.pie_chart_outline,
                                     size: 18,
-                                    color: AppTheme.primary,
+                                    color: AppTheme.muted,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
-                                    child: Text(
-                                      '€ ${_quotaPerPlayer!.toStringAsFixed(2)} a persona su $_maxPlayers giocatori',
-                                      style: const TextStyle(
-                                        color: AppTheme.primary,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 13.5,
+                                    child: Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text:
+                                                '€ ${_quotaPerPlayer!.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text:
+                                                ' a testa, dividendo su $_maxPlayers giocatori',
+                                            style: const TextStyle(
+                                              color: AppTheme.muted,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -635,42 +774,25 @@ class _MatchFormPageState extends State<MatchFormPage> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 10),
+                          // Le due caselle sembrano uguali ma finiscono in due
+                          // posti diversi: senza questa riga si carica la foto
+                          // del campo aspettandosi di vederla nell'elenco.
+                          const _HelperLine(
+                            icon: Icons.info_outline,
+                            text:
+                                'Facoltative. La copertina è l\'immagine grande '
+                                'nell\'elenco partite, la foto campo aiuta a '
+                                'riconoscere la struttura all\'arrivo.',
+                          ),
                         ],
                       ),
 
+                      // L'errore sta appena sopra al bottone, cioè dove
+                      // l'occhio è già puntato dopo il tap che l'ha causato.
                       if (_error != null) ...[
                         const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppTheme.danger.withValues(alpha: .12),
-                            borderRadius: BorderRadius.circular(
-                              AppTheme.radiusMd,
-                            ),
-                            border: Border.all(
-                              color: AppTheme.danger.withValues(alpha: .4),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.error_outline,
-                                color: AppTheme.danger,
-                                size: 19,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  _error!,
-                                  style: const TextStyle(
-                                    color: AppTheme.danger,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _FormErrorBanner(message: _error!),
                       ],
                       const SizedBox(height: 24),
                       SizedBox(
@@ -680,8 +802,13 @@ class _MatchFormPageState extends State<MatchFormPage> {
                           icon: _loading
                               ? const SizedBox.square(
                                   dimension: 18,
+                                  // Colore esplicito: lo spinner di default
+                                  // prende il verde del tema
+                                  // (ProgressIndicatorTheme) e su un bottone
+                                  // già verde era quasi invisibile.
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
+                                    color: AppTheme.onPrimary,
                                   ),
                                 )
                               : Icon(
@@ -689,8 +816,13 @@ class _MatchFormPageState extends State<MatchFormPage> {
                                       ? Icons.rocket_launch_outlined
                                       : Icons.save_outlined,
                                 ),
+                          // L'etichetta cambia durante l'attesa: "Pubblica
+                          // partita" mentre la richiesta è in volo lascia il
+                          // dubbio di non aver premuto davvero.
                           label: Text(
-                            widget.matchId == null
+                            _loading
+                                ? 'Un attimo…'
+                                : widget.matchId == null
                                 ? 'Pubblica partita'
                                 : 'Salva modifiche',
                           ),
@@ -719,6 +851,9 @@ class _MatchFormPageState extends State<MatchFormPage> {
 
   static String? _required(String? value) =>
       (value?.trim().length ?? 0) >= 2 ? null : 'Campo obbligatorio.';
+
+  /// Formati ammessi, negli stessi valori e ordine dei form di lega.
+  static const _formats = ['5v5', '7v7', '8v8', '10v10', '11v11'];
 }
 
 class _MediaPicker extends StatelessWidget {
@@ -735,40 +870,68 @@ class _MediaPicker extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
-    child: Container(
-      height: 120,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.outline),
-        image: bytes == null
-            ? null
-            : DecorationImage(image: MemoryImage(bytes!), fit: BoxFit.cover),
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: bytes == null
-              ? const Color(0xFF171B18)
-              : Colors.black.withValues(alpha: .35),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: const Color(0xFFC7FF3D)),
-            const SizedBox(height: 7),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-            Text(
-              bytes == null ? 'Aggiungi' : 'Cambia',
-              style: const TextStyle(color: AppTheme.muted, fontSize: 11),
+  Widget build(BuildContext context) {
+    // Raggio del design system al posto del 16 scritto a mano: la casella
+    // foto è grande quanto una card, quindi prende lo stesso radiusLg.
+    final radius = BorderRadius.circular(AppTheme.radiusLg);
+    final chosen = bytes != null;
+    return Semantics(
+      button: true,
+      label: chosen ? 'Sostituisci $label' : 'Aggiungi $label',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          height: 120,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: AppTheme.outline),
+            image: chosen
+                ? DecorationImage(image: MemoryImage(bytes!), fit: BoxFit.cover)
+                : null,
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              // Token del tema invece degli esadecimali scritti a mano: erano
+              // uno il duplicato quasi esatto di AppTheme.surface, l'altro
+              // proprio il valore di AppTheme.primary copiato a mano. Sopra
+              // alla foto serve un velo scuro perché il testo resti leggibile
+              // anche su un'immagine chiara: è il nero dello sfondo dell'app,
+              // non un `Colors.black` fuori palette.
+              color: chosen
+                  ? AppTheme.background.withValues(alpha: .55)
+                  : AppTheme.surface,
             ),
-          ],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Icona neutra: queste due caselle sono facoltative e non
+                // devono accendersi come se fossero il passo importante.
+                // Piena invece che outline quando la foto c'è già, come da
+                // regola generale attivo/inattivo.
+                Icon(
+                  chosen ? Icons.check_circle : icon,
+                  color: chosen ? AppTheme.foreground : AppTheme.muted,
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  chosen ? 'Cambia' : 'Aggiungi',
+                  style: const TextStyle(color: AppTheme.muted, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Blocco del modulo: un titolino con icona e un gruppo di campi dentro a una
@@ -798,15 +961,22 @@ class _FormSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 16, color: AppTheme.primary),
+                // Icona e titolino in grigio: sono cartelli indicatori, non
+                // contenuto. Accesi di verde su sei sezioni facevano a gara
+                // fra loro, con le risposte dell'utente e con il bottone.
+                Icon(icon, size: 15, color: AppTheme.muted),
                 const SizedBox(width: 8),
-                Text(
-                  eyebrow.toUpperCase(),
-                  style: const TextStyle(
-                    color: AppTheme.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4,
+                Expanded(
+                  child: Text(
+                    eyebrow.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                    ),
                   ),
                 ),
               ],
@@ -837,9 +1007,46 @@ class _FieldLabel extends StatelessWidget {
   );
 }
 
+/// Riga di aiuto sotto a un campo: dice la conseguenza della scelta.
+///
+/// Non è un `helperText` del TextField perché serve anche sotto ai selettori a
+/// pillole e al riquadro della data, che un InputDecoration non ce l'hanno.
+class _HelperLine extends StatelessWidget {
+  const _HelperLine({required this.icon, required this.text, this.maxLines});
+
+  final IconData icon;
+  final String text;
+
+  /// Da valorizzare quando il testo contiene roba scritta dagli utenti (il
+  /// nome di una lega): lì un valore lunghissimo va troncato, mentre le
+  /// spiegazioni che scriviamo noi possono andare a capo quanto serve.
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 14, color: AppTheme.mutedSoft),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Text(
+          text,
+          maxLines: maxLines,
+          overflow: maxLines == null ? null : TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppTheme.mutedSoft,
+            fontSize: 11.5,
+            height: 1.4,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 /// Pillola selezionabile, usata per il formato della partita.
-class _SelectableChip extends StatelessWidget {
-  const _SelectableChip({
+class _ChoicePill extends StatelessWidget {
+  const _ChoicePill({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -851,29 +1058,72 @@ class _SelectableChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.primary : AppTheme.surfaceHigh,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
+    // Material + InkWell invece di un GestureDetector su un Container: così il
+    // tocco ha la sua onda, ritagliata sulla pillola dallo StadiumBorder, e i
+    // lettori di schermo annunciano "selezionato" grazie a Semantics. Il fade
+    // di 150 ms dell'AnimatedContainer si perde, ma era un ritorno molto più
+    // debole dell'onda che ora parte da sotto il dito.
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? AppTheme.primary : AppTheme.surfaceHigh,
+        clipBehavior: Clip.antiAlias,
+        shape: StadiumBorder(
+          side: BorderSide(
             color: selected ? AppTheme.primary : AppTheme.outline,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? AppTheme.onPrimary : AppTheme.foreground,
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? AppTheme.onPrimary : AppTheme.foreground,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Errore di invio del modulo, in un riquadro rosso appena sopra al bottone.
+class _FormErrorBanner extends StatelessWidget {
+  const _FormErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppTheme.danger.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      border: Border.all(color: AppTheme.danger.withValues(alpha: .4)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.error_outline, color: AppTheme.danger, size: 19),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: AppTheme.danger,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Scelta della visibilita con le conseguenze scritte accanto.
@@ -886,89 +1136,120 @@ class _VisibilityPicker extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
 
+  static const _options = [
+    (
+      'league_only',
+      'Solo lega',
+      'La vedono e possono iscriversi solo i membri della lega',
+      Icons.shield_outlined,
+    ),
+    (
+      'public',
+      'Pubblica',
+      'Compare anche ai giocatori della zona che non sono in lega',
+      Icons.public,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (final option in _options) ...[
+        if (option != _options.first) const SizedBox(height: 9),
+        _RadioOption(
+          title: option.$2,
+          description: option.$3,
+          icon: option.$4,
+          selected: value == option.$1,
+          onTap: () => onChanged(option.$1),
+        ),
+      ],
+    ],
+  );
+}
+
+/// Opzione a scelta singola: icona, titolo, conseguenza, pallino a destra.
+class _RadioOption extends StatelessWidget {
+  const _RadioOption({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    const options = [
-      (
-        'league_only',
-        'Solo lega',
-        'La vedono i membri della lega',
-        Icons.shield_outlined,
-      ),
-      (
-        'public',
-        'Pubblica',
-        'Visibile anche ai giocatori vicini',
-        Icons.public,
-      ),
-    ];
-    return Column(
-      children: [
-        for (final option in options) ...[
-          if (option != options.first) const SizedBox(height: 9),
-          GestureDetector(
-            onTap: () => onChanged(option.$1),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: value == option.$1
-                    ? AppTheme.primary.withValues(alpha: .1)
-                    : AppTheme.surfaceHigh,
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                border: Border.all(
-                  color: value == option.$1
-                      ? AppTheme.primary.withValues(alpha: .55)
-                      : AppTheme.outline,
+    return Semantics(
+      inMutuallyExclusiveGroup: true,
+      selected: selected,
+      child: Material(
+        color: selected
+            ? AppTheme.primary.withValues(alpha: .1)
+            : AppTheme.surfaceHigh,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          side: BorderSide(
+            color: selected
+                ? AppTheme.primary.withValues(alpha: .55)
+                : AppTheme.outline,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(13),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 19,
+                  color: selected ? AppTheme.primary : AppTheme.muted,
                 ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    option.$4,
-                    size: 19,
-                    color: value == option.$1
-                        ? AppTheme.primary
-                        : AppTheme.muted,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          option.$2,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
                         ),
-                        const SizedBox(height: 1),
-                        Text(
-                          option.$3,
-                          style: const TextStyle(
-                            color: AppTheme.muted,
-                            fontSize: 11.5,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          color: AppTheme.muted,
+                          fontSize: 11.5,
+                          height: 1.35,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Icon(
-                    value == option.$1
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    size: 19,
-                    color: value == option.$1
-                        ? AppTheme.primary
-                        : AppTheme.outlineSolid,
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 19,
+                  color: selected ? AppTheme.primary : AppTheme.outlineSolid,
+                ),
+              ],
             ),
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }
