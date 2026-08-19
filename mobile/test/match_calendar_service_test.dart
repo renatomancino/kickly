@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:device_calendar/device_calendar.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickly_app/core/calendar/match_calendar_service.dart';
 import 'package:kickly_app/data/models.dart';
@@ -20,7 +21,17 @@ class _FakeDeviceCalendarPlugin extends DeviceCalendarPlugin {
   List<Calendar> calendars = [
     Calendar(id: 'cal-1', isReadOnly: false, isDefault: true),
   ];
-  String createdEventId = 'evt-nuovo';
+
+  /// Nullable: il plugin può rispondere "successo" senza dare l'id
+  /// dell'evento, ed è un caso che il servizio non deve scambiare per
+  /// un'aggiunta riuscita.
+  String? createdEventId = 'evt-nuovo';
+
+  /// Riproduce un guasto del plugin: `device_calendar` fa da ponte verso
+  /// EventKit/CalendarContract, quindi un'eccezione dal canale nativo è un
+  /// esito realistico, non ipotetico — è esattamente com'è arrivato il crash
+  /// alla prima richiesta di permesso su Android.
+  bool createThrows = false;
 
   int createOrUpdateCalls = 0;
   int deleteCalls = 0;
@@ -43,6 +54,7 @@ class _FakeDeviceCalendarPlugin extends DeviceCalendarPlugin {
   Future<Result<String>?> createOrUpdateEvent(Event? event) async {
     createOrUpdateCalls++;
     lastEvent = event;
+    if (createThrows) throw PlatformException(code: 'calendar_failure');
     return Result<String>()..data = createdEventId;
   }
 
@@ -180,5 +192,147 @@ void main() {
       await expectLater(service.syncForResponse(_match(), 'going'), completes);
       expect(plugin.createOrUpdateCalls, 0);
     });
+
+    test('un guasto del plugin durante la sincronizzazione automatica resta silenzioso e non propaga l\'errore', () async {
+      // Il percorso automatico gira dopo una RSVP già confermata al server:
+      // se lasciasse passare l'eccezione, l'utente vedrebbe un errore per
+      // una risposta che in realtà è andata a buon fine.
+      final plugin = _FakeDeviceCalendarPlugin()..createThrows = true;
+      final service = MatchCalendarService(plugin: plugin);
+
+      await expectLater(service.syncForResponse(_match(), 'going'), completes);
+    });
+  });
+
+  group('MatchCalendarService: aggiunta manuale dal bottone', () {
+    test('l\'aggiunta riuscita lo dice esplicitamente, invece di ingoiare l\'esito come fa la sincronizzazione automatica', () async {
+      final plugin = _FakeDeviceCalendarPlugin();
+      final service = MatchCalendarService(plugin: plugin);
+
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.added);
+      expect(plugin.createOrUpdateCalls, 1);
+      // Stessi dati del percorso automatico: il bottone non è una scorciatoia
+      // che scrive un evento più povero.
+      expect(plugin.lastEvent!.title, 'Amichevole del giovedì');
+      expect(plugin.lastEvent!.location, 'Campo Sud, Torino');
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('calendar_event_m1'), 'evt-nuovo');
+    });
+
+    test('col permesso negato riporta il caso specifico, l\'unico a cui l\'utente possa rimediare dalle impostazioni', () async {
+      final plugin = _FakeDeviceCalendarPlugin()..permissionGranted = false;
+      final service = MatchCalendarService(plugin: plugin);
+
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.permissionDenied);
+      expect(plugin.createOrUpdateCalls, 0);
+    });
+
+    test('senza un calendario su cui scrivere lo distingue dal permesso negato: qui non c\'è niente da autorizzare', () async {
+      final plugin = _FakeDeviceCalendarPlugin()
+        ..calendars = [Calendar(id: 'cal-ro', isReadOnly: true)];
+      final service = MatchCalendarService(plugin: plugin);
+
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.noWritableCalendar);
+      expect(plugin.createOrUpdateCalls, 0);
+    });
+
+    test('un\'eccezione del plugin diventa un esito da mostrare, non un errore che risale fino alla schermata', () async {
+      final plugin = _FakeDeviceCalendarPlugin()..createThrows = true;
+      final service = MatchCalendarService(plugin: plugin);
+
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.pluginError);
+    });
+
+    test('se il plugin non restituisce l\'id dell\'evento, l\'aggiunta non viene dichiarata riuscita', () async {
+      // Senza id non c'è prova che l'evento sia stato scritto: dire "fatto"
+      // qui manderebbe l'utente a cercare nel calendario qualcosa che non c'è.
+      final plugin = _FakeDeviceCalendarPlugin()..createdEventId = null;
+      final service = MatchCalendarService(plugin: plugin);
+
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.pluginError);
+    });
+
+    test('riaggiungere la stessa partita aggiorna l\'evento gia\' creato invece di duplicarlo', () async {
+      // Il bottone resta premibile anche a partita gia' aggiunta: deve essere
+      // innocuo, non creare un doppione in agenda a ogni tocco.
+      final plugin = _FakeDeviceCalendarPlugin();
+      final service = MatchCalendarService(plugin: plugin);
+
+      await service.addManually(_match());
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.added);
+      expect(plugin.createOrUpdateCalls, 2);
+      expect(plugin.lastEvent!.eventId, 'evt-nuovo');
+    });
+  });
+
+  group('MatchCalendarService: partita gia\' in calendario', () {
+    test('una partita mai aggiunta non risulta in calendario', () async {
+      final service = MatchCalendarService(plugin: _FakeDeviceCalendarPlugin());
+
+      expect(await service.isSynced('m1'), isFalse);
+    });
+
+    test('dopo un\'aggiunta riuscita la partita risulta in calendario, cosi\' il bottone puo\' dirlo', () async {
+      final service = MatchCalendarService(plugin: _FakeDeviceCalendarPlugin());
+
+      await service.addManually(_match());
+
+      expect(await service.isSynced('m1'), isTrue);
+    });
+
+    test('vale anche per l\'aggiunta automatica: il bottone riflette cio\' che ha fatto la RSVP', () async {
+      final service = MatchCalendarService(plugin: _FakeDeviceCalendarPlugin());
+
+      await service.syncForResponse(_match(), 'going');
+
+      expect(await service.isSynced('m1'), isTrue);
+    });
+
+    test('lo stato e\' per singola partita: aggiungerne una non fa risultare aggiunte le altre', () async {
+      final service = MatchCalendarService(plugin: _FakeDeviceCalendarPlugin());
+
+      await service.addManually(_match(id: 'm1'));
+
+      expect(await service.isSynced('m2'), isFalse);
+    });
+
+    test(
+      'dopo aver disdetto la partita non risulta piu\' in calendario',
+      () async {
+        final service = MatchCalendarService(
+          plugin: _FakeDeviceCalendarPlugin(),
+        );
+        final match = _match();
+
+        await service.addManually(match);
+        await service.syncForResponse(match, 'not_going');
+
+        expect(await service.isSynced('m1'), isFalse);
+      },
+    );
+
+    test(
+      'un\'aggiunta fallita non fa risultare la partita in calendario',
+      () async {
+        final plugin = _FakeDeviceCalendarPlugin()..permissionGranted = false;
+        final service = MatchCalendarService(plugin: plugin);
+
+        await service.addManually(_match());
+
+        expect(await service.isSynced('m1'), isFalse);
+      },
+    );
   });
 }
