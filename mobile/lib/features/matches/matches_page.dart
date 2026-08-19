@@ -75,6 +75,11 @@ class _MatchesPageState extends State<MatchesPage> {
                 ),
               ),
               IconButton.filledTonal(
+                // Pulsante di sola icona: senza tooltip un lettore di
+                // schermo annuncia "pulsante" e basta, e questa "+" in
+                // testata non ha nessun testo vicino da cui dedurre che
+                // apre la creazione di una partita.
+                tooltip: 'Crea una partita',
                 onPressed: () => context.push('/matches/new'),
                 icon: const Icon(Icons.add),
               ),
@@ -378,7 +383,7 @@ class _MatchListEntry extends StatelessWidget {
     final accentColor = _accentColor;
     final card = MatchCard(match: match, onTap: onTap);
     if (accentColor == null) return card;
-    return Stack(
+    final entry = Stack(
       children: [
         card,
         // Larghezza 4px, altezza piena: lo Stack si dimensiona sulla card
@@ -398,6 +403,28 @@ class _MatchListEntry extends StatelessWidget {
           ),
         ),
       ],
+    );
+
+    // Etichetta aggiunta solo per "forse", e per un motivo preciso: la
+    // `MatchCard` traduce in pillola di testo 'going' ("Ci sei"), 'waitlist'
+    // e 'not_going', ma NON 'maybe' — per quella risposta cade nel ramo
+    // `_ => null` e mostra semmai la distanza. Risultato: la barra oro è
+    // l'unico posto in tutta la card dove quell'informazione esiste, e chi
+    // non distingue i colori o usa un lettore di schermo non ha modo di
+    // raggiungerla. Nel caso 'going' invece la pillola "Ci sei" c'è già:
+    // aggiungere un'etichetta anche lì raddoppierebbe l'annuncio senza dare
+    // niente di nuovo.
+    //
+    // `container: true` e non MergeSemantics: quest'ultimo fonderebbe tutta
+    // la card in un unico annuncio, cambiando la navigazione delle sole
+    // card "forse" e rendendo la lista incoerente. Così l'etichetta è un
+    // nodo in più prima della card, e la card resta esplorabile come le
+    // altre.
+    if (match.currentResponse != 'maybe') return entry;
+    return Semantics(
+      container: true,
+      label: 'Hai risposto Forse',
+      child: entry,
     );
   }
 }

@@ -206,19 +206,32 @@ class _KicklyBottomBar extends StatelessWidget {
                             ),
                           ],
                         ),
-                        child: Material(
-                          color: AppTheme.primary,
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () => _quickActions(context),
-                            child: SizedBox(
-                              width: _kFabDiameter,
-                              height: _kFabDiameter,
-                              child: const Icon(
-                                Icons.add,
-                                color: AppTheme.onPrimary,
-                                size: 28,
+                        // Il "+" è fatto di InkWell + Icon: nessuno dei due
+                        // porta un'etichetta, quindi VoiceOver/TalkBack lo
+                        // annunciava come un nudo "pulsante" — ed è il
+                        // comando più importante della barra, l'unico da cui
+                        // si crea qualcosa. Tooltip e non Semantics(label:)
+                        // perché copre due bisogni con un elemento solo:
+                        // dà il nome al lettore di schermo e mostra la
+                        // stessa etichetta a video su pressione prolungata,
+                        // come fa `FloatingActionButton` con il suo
+                        // parametro `tooltip`.
+                        child: Tooltip(
+                          message: 'Azioni rapide',
+                          child: Material(
+                            color: AppTheme.primary,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => _quickActions(context),
+                              child: SizedBox(
+                                width: _kFabDiameter,
+                                height: _kFabDiameter,
+                                child: const Icon(
+                                  Icons.add,
+                                  color: AppTheme.onPrimary,
+                                  size: 28,
+                                ),
                               ),
                             ),
                           ),
@@ -238,6 +251,35 @@ class _KicklyBottomBar extends StatelessWidget {
   }
 
   Widget _item((IconData, IconData, String) item, int index, bool active) {
+    // Quale tab è aperta si capisce solo dal colore (verde vs grigio) e dalla
+    // lampada che scivola sopra l'icona: chi naviga con il lettore di schermo
+    // sentiva quattro voci identiche ("Home", "Partite", "Leghe", "Profilo")
+    // senza modo di sapere dov'è già. `selected` è il flag che
+    // VoiceOver/TalkBack traducono in "selezionato".
+    //
+    // `button` serve a parte: un InkWell nudo non alza il flag isButton (solo
+    // l'azione di tap), quindi la voce veniva letta come testo qualsiasi e
+    // non come qualcosa da premere.
+    //
+    // MergeSemantics attorno: senza, i flag resterebbero su un nodo separato
+    // da quello che porta il testo, e il lettore li annuncerebbe staccati
+    // dall'elemento a cui si riferiscono. È lo stesso accoppiamento
+    // (MergeSemantics + Semantics(selected:)) che il NavigationBar di Flutter
+    // usa per le proprie destinazioni.
+    return MergeSemantics(
+      child: Semantics(
+        selected: active,
+        button: true,
+        child: _itemButton(item, index, active),
+      ),
+    );
+  }
+
+  Widget _itemButton(
+    (IconData, IconData, String) item,
+    int index,
+    bool active,
+  ) {
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       // goBranch (non context.go) è quello che preserva lo stack di

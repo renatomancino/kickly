@@ -1,0 +1,36 @@
+-- Indice mancante per il feed notifiche dell'utente.
+--
+-- PERCHE': su public.notifications gli unici indici che toccano user_id sono
+-- parziali — notifications_user_unread_idx (user_id, created_at desc) vive
+-- "where read_at is null" e notifications_dedupe_idx "where dedupe_key is not
+-- null". La migrazione 20260812180511_milestone_6_notifications_pwa.sql ha
+-- droppato l'unico indice totale che c'era (notifications_user_idx) e non l'ha
+-- rimpiazzato. Il planner puo' usare un indice parziale solo se la query ha lo
+-- stesso predicato: la lista notifiche NON filtra su read_at, quindi resta
+-- fuori e finisce in seq scan sull'intera tabella (righe di TUTTI gli utenti)
+-- piu' un top-N sort. La trappola e' che oggi non si vede: con poche centinaia
+-- di righe il seq scan e' istantaneo e il Performance Advisor non segnala nulla
+-- perche' segnala solo cio' che ha gia' visto degradare. notifications e' pero'
+-- la tabella che cresce piu' in fretta (una riga per membro per ogni partita
+-- creata, promemoria, annuncio, MVP, rating), quindi il degrado arriva presto e
+-- colpisce l'avvio dell'app.
+--
+-- Query servita: `select id, type, title, body, link, read_at, created_at
+-- from notifications where user_id = :me order by created_at desc limit 80`,
+-- in mobile/lib/data/kickly_repository.dart -> KicklyRepository.getNotifications()
+-- (chiamata sia dalla schermata Notifiche sia dentro getHome(), quindi a ogni
+-- apertura dell'app). L'ordine delle colonne e' quello giusto: uguaglianza su
+-- user_id prima, poi created_at desc come chiave di ordinamento, cosi' il
+-- planner prende le prime 80 righe direttamente dall'indice senza sort.
+--
+-- Niente `concurrently`: le migrazioni Supabase girano dentro una transazione e
+-- CREATE INDEX CONCURRENTLY non e' ammesso in un blocco transazionale (fallisce
+-- con "CREATE INDEX CONCURRENTLY cannot run inside a transaction block"). Il
+-- lock in scrittura su notifications dura quanto la build dell'indice, che ai
+-- volumi attuali e' nell'ordine dei millisecondi.
+--
+-- notifications_user_unread_idx NON viene droppato di proposito: resta piu'
+-- piccolo e piu' selettivo per markAllNotificationsRead()
+-- (`where user_id = :me and read_at is null`) e per il badge dei non letti.
+create index if not exists notifications_user_feed_idx
+on public.notifications (user_id, created_at desc);
