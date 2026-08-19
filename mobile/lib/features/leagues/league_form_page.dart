@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app.dart';
+import '../../core/location/italian_location_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 
@@ -30,8 +31,12 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _description = TextEditingController();
-  final _city = TextEditingController();
   final _country = TextEditingController(text: 'IT');
+  // Non un TextEditingController: ItalianMunicipalityField gestisce il suo
+  // campo internamente e riporta la selezione qui solo quando è un comune
+  // reale con coordinate, mai testo libero — è quello che serve al gate di
+  // distanza in join_public_league per avere un dato su cui calcolare.
+  ItalianPlace? _place;
   String _format = '5v5';
   String _visibility = 'private';
   int _maxMembers = 20;
@@ -63,7 +68,6 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
   void dispose() {
     _name.dispose();
     _description.dispose();
-    _city.dispose();
     _country.dispose();
     super.dispose();
   }
@@ -75,6 +79,18 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    // _place non è un TextFormField: il Form lo ignora, quindi senza questo
+    // controllo esplicito il tap restava muto (nessun errore, nessun
+    // caricamento) se non si sceglieva un comune dai suggerimenti. Stesso
+    // problema e stessa soluzione già adottata in match_form_page.
+    if (_place == null) {
+      setState(
+        () => _error =
+            'Scegli la città dai suggerimenti: serve a chi è nelle '
+            'vicinanze per trovare ed entrare nella lega.',
+      );
+      return;
+    }
     // Riscontro tattile alla conferma di un form importante come la
     // creazione di una lega, non su ogni tap generico del modulo.
     // `unawaited`: è un effetto collaterale sul motore aptico, attenderlo
@@ -85,15 +101,19 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
       _error = null;
     });
     try {
+      final place = _place!;
       final slug = await AppScope.of(context).repository.createLeague(
         name: _name.text,
         slug: _slugify(_name.text),
         description: _description.text,
-        city: _city.text,
+        city: place.city,
         country: _country.text,
         visibility: _visibility,
         footballFormat: _format,
         maxMembers: _maxMembers,
+        province: place.province,
+        latitude: place.latitude,
+        longitude: place.longitude,
         logoBytes: _logoBytes,
         logoExtension: _logoExtension,
       );
@@ -205,49 +225,33 @@ class _LeagueFormPageState extends State<LeagueFormPage> {
                     eyebrow: 'Dove giocate',
                     icon: Icons.location_on_outlined,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: _city,
-                              textCapitalization: TextCapitalization.words,
-                              decoration: const InputDecoration(
-                                labelText: 'Città',
-                              ),
-                              validator: (value) =>
-                                  (value?.trim().length ?? 0) >= 2
-                                  ? null
-                                  : 'Indica la città.',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _country,
-                              // Il campo vuole una sigla ISO: forzare le
-                              // maiuscole dalla tastiera evita il "it"
-                              // minuscolo che poi stona negli elenchi.
-                              textCapitalization: TextCapitalization.characters,
-                              decoration: const InputDecoration(
-                                labelText: 'Paese',
-                              ),
-                              validator: (value) =>
-                                  (value?.trim().length ?? 0) >= 2
-                                  ? null
-                                  : 'Sigla di 2 lettere.',
-                            ),
-                          ),
-                        ],
+                      ItalianMunicipalityField(
+                        initialCity: _place?.city,
+                        initialProvince: _place?.province,
+                        initialLatitude: _place?.latitude,
+                        initialLongitude: _place?.longitude,
+                        onSelected: (place) => setState(() => _place = place),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _country,
+                        // Il campo vuole una sigla ISO: forzare le
+                        // maiuscole dalla tastiera evita il "it" minuscolo
+                        // che poi stona negli elenchi.
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(labelText: 'Paese'),
+                        validator: (value) => (value?.trim().length ?? 0) >= 2
+                            ? null
+                            : 'Sigla di 2 lettere.',
                       ),
                       const SizedBox(height: 10),
                       const _HelperLine(
                         icon: Icons.travel_explore_outlined,
                         text:
-                            'La città serve ai giocatori della zona per trovare '
-                            'la lega e le sue partite pubbliche. Il paese è la '
-                            'sigla di 2 lettere, es. IT.',
+                            'La città con le coordinate esatte, scelta dai '
+                            'suggerimenti, è quella che permette a chi è '
+                            'nelle vicinanze di trovare la lega — se è '
+                            'pubblica, anche di entrarci da solo.',
                       ),
                     ],
                   ),
@@ -651,7 +655,7 @@ class _VisibilityPicker extends StatelessWidget {
     (
       'public',
       'Pubblica',
-      'Compare nelle ricerche: chiunque può chiedere di entrare',
+      'Chi è nel raggio di 50 km dalla città della lega può entrare da solo',
       Icons.public,
     ),
   ];
