@@ -45,6 +45,18 @@
 		</array>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Kickly usa la libreria foto per aggiornare il tuo avatar.</string>
+		<!-- Verificato nel sorgente nativo del plugin device_calendar 3.9.0
+		     (ios/Classes/SwiftDeviceCalendarPlugin.swift): chiama la vecchia
+		     eventStore.requestAccess(to:completion:), non le API separate
+		     "solo scrittura" introdotte in iOS 17. Quella vecchia API legge
+		     NSCalendarsUsageDescription — è la chiave che serve davvero. La
+		     versione FullAccess è solo un ripiego, nel caso iOS in futuro
+		     reindirizzi quella chiamata sulla nuova API; costa niente
+		     tenerla, ma non è quella effettivamente letta oggi. -->
+		<key>NSCalendarsUsageDescription</key>
+		<string>Kickly aggiunge al calendario le partite a cui confermi la presenza.</string>
+		<key>NSCalendarsFullAccessUsageDescription</key>
+		<string>Kickly aggiunge al calendario le partite a cui confermi la presenza.</string>
 		<!-- Background refresh: permette il controllo periodico delle notifiche
 	     quando l'app non e' in primo piano. Senza queste due chiavi iOS non
 	     risveglia mai il task e le notifiche arrivano solo ad app aperta. -->
