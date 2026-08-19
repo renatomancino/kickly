@@ -45,8 +45,9 @@ degli account studenti finche' dura.
 - **Copilot Autofix su alert CodeQL** — non incluso in questa spec: non e'
   stato possibile verificare con certezza se richieda una licenza Copilot
   distinta dalla sola GHAS gratuita su repo pubblici. Da rivalutare a parte.
-- **Build iOS in CI** — fuori scope: indipendente dal resto di questa spec,
-  eventualmente un task a se' in futuro.
+- **Lighthouse CI sulla PWA** — non incluso: i punteggi su runner condivisi
+  sono rumorosi, rischia di diventare un check che si ignora. Riconsiderabile
+  in futuro come check puramente informativo, non bloccante.
 - **Pipeline Blocco B estesa ai fallimenti sulle singole PR** (non solo
   push su `main`) — fuori scope per la v1: chi apre la PR vede gia' il
   fallimento da solo, e triggerare su PR da fork riaprirebbe esattamente il
@@ -82,6 +83,47 @@ Complementa gitleaks (che scandisce il working tree ad ogni PR): il
 push protection nativo blocca il push stesso prima che il segreto entri nella
 storia, e la scansione nativa copre anche issue/PR/commenti, non solo i file.
 Documentato come aggiunta a `BRANCH_PROTECTION.md` durante l'implementazione.
+
+### A4. iOS build (debug, `--no-codesign`)
+
+Nuovo job, stesso pattern di `android-build` ma su `macos-latest` e con
+`flutter build ios --no-codesign --dart-define-from-file=config.local.json`
+(stessa configurazione fittizia gia' usata per Android). A differenza di
+Android, il trigger e' **solo `push` su `main`**, non anche `pull_request`:
+e' un job nuovo e non ancora verificato, quindi meglio catturare le rotture
+subito dopo il merge invece di allungare il feedback loop di ogni PR fin da
+subito. Si puo' allargare alle PR piu' avanti se si dimostra stabile e
+sufficientemente veloce.
+
+Nota di rischio: se il progetto Xcode ha capability che richiedono un
+profilo di provisioning (push notification, associated domains, ecc.),
+`--no-codesign` potrebbe non bastare a far passare il build. Da verificare
+con una prova pratica, non e' garantito a priori.
+
+### A5. Smoke test sulle migrazioni Supabase
+
+A differenza di A4, questo **deve** girare sulle PR (non solo su main): lo
+scopo e' validare le migrazioni *nuove* introdotte dalla PR stessa, non
+quelle gia' in main. Estende concettualmente `migrations-check` (che oggi
+verifica solo che le migrazioni esistenti non siano state toccate, non che
+quelle nuove siano valide). Usa la CLI Supabase (gratuita) per avviare uno
+stack locale via Docker e applicare tutte le migrazioni in sequenza: un
+errore SQL o un ordine di dipendenza sbagliato fa fallire il job invece di
+scoprirsi al primo deploy reale.
+
+### A6. Coverage tracking
+
+Aggiunge `--coverage` al comando `flutter test` gia' presente nel job
+`flutter`, e un passo che riassume il delta di copertura nel job (commento
+sulla PR o solo summary nella UI di Actions, da decidere in implementazione).
+Nessun nuovo job, nessun trigger nuovo: stessa cadenza del job esistente.
+
+### A7. PR title lint (conventional commits)
+
+Nuovo job leggero, trigger `pull_request`, verifica che il titolo della PR
+segua un formato conventional-commit (`feat:`, `fix:`, `chore:`, ecc.). Non
+cambia nulla oggi, ma rende possibile generare changelog automatico in
+futuro senza retrofitting.
 
 ## Design — Blocco B: fallimento CI su main -> issue -> triage gratuito -> Copilot
 
@@ -167,22 +209,34 @@ di considerare la pipeline pronta, non sono dettagli implementativi scontati:
    tier gratuito, rate limit reali) — da verificare con un run di prova
    isolato prima di integrarlo nella pipeline.
 
-Nessuno dei due rischi blocca Blocco A, che e' indipendente e puo' partire
-subito.
+Un terzo punto, minore, riguarda A4: se il build iOS senza firma non basta a
+causa di capability che richiedono un profilo di provisioning (vedi sopra).
+Non blocca il resto del rollout: nel caso, il job A4 si rimanda o si
+restringe finche' non si risolve lato progetto Xcode.
+
+Nessuno di questi rischi blocca Blocco A1-A3/A5-A7, che sono indipendenti e
+possono partire subito.
 
 ## Piano di rollout
 
-1. Blocco A (A1 dependency-review, A2 CODEOWNERS, A3 toggle nativi) — una PR
-   sola, basso rischio, pronta rapidamente.
-2. Blocco B, prova isolata dei due punti a rischio (assegnazione Copilot via
+1. Blocco A "sicuro" (A1 dependency-review, A2 CODEOWNERS, A3 toggle nativi,
+   A5 smoke test migrazioni, A6 coverage, A7 PR title lint) — una PR sola,
+   basso rischio, pronta rapidamente.
+2. A4 iOS build — PR a se', per isolare l'eventuale problema di provisioning
+   senza bloccare il resto di Blocco A.
+3. Blocco B, prova isolata dei due punti a rischio (assegnazione Copilot via
    API, chiamata GitHub Models) su un workflow minimo di test.
-3. Blocco B, pipeline completa una volta confermati i due punti sopra.
+4. Blocco B, pipeline completa una volta confermati i due punti sopra.
 
 ## Testing / verifica
 
-- Blocco A: verificare che `dependency-review-action` giri su una PR di
-  prova che introduce volutamente una dipendenza con CVE nota, e che fallisca
-  come atteso; verificare che CODEOWNERS richieda review dove previsto.
+- Blocco A1-A3, A5-A7: verificare che `dependency-review-action` giri su una
+  PR di prova che introduce volutamente una dipendenza con CVE nota, e che
+  fallisca come atteso; verificare che CODEOWNERS richieda review dove
+  previsto; verificare che il job A5 fallisca su una migrazione con un errore
+  SQL introdotto apposta e passi su una valida.
+- A4: verificare che il job completi su un branch di prova prima di
+  considerarlo pronto per girare su `main`.
 - Blocco B: simulare un fallimento su `main` (es. un job che fallisce di
   proposito su un branch di test rinominato temporaneamente, o un dry-run del
   solo workflow di triage con un run id gia' fallito in passato) e verificare
