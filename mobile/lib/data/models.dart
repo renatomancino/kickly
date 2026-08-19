@@ -545,6 +545,7 @@ class DashboardData {
     required this.leagues,
     this.lastMatch,
     this.nearby = const [],
+    this.openNearby = const [],
   });
 
   final UserProfile profile;
@@ -554,6 +555,12 @@ class DashboardData {
   final List<LeagueSummary> leagues;
   final LastMatchSummary? lastMatch;
   final List<MatchSummary> nearby;
+
+  /// Partite pubbliche vicine con un posto libero, di leghe a cui l'utente
+  /// non appartiene ancora. Campo distinto da [nearby] apposta: quello è
+  /// "altre partite delle tue leghe" nonostante il nome, questo è scoperta
+  /// di partite altrui — mescolarli in home avrebbe confuso i due significati.
+  final List<MatchSummary> openNearby;
 }
 
 class KicklyNotification {
