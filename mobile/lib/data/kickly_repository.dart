@@ -789,6 +789,46 @@ class KicklyRepository {
     return matches;
   }
 
+  /// Partite pubbliche vicine con un posto ancora libero, per la sezione
+  /// "cercano un decimo" in home. La distanza e il filtro "posti liberi"
+  /// sono già calcolati lato server (vedi la RPC): qui c'è solo la mappatura
+  /// verso MatchSummary, riusato così com'è dalla card e dalla schermata di
+  /// dettaglio (che già sa gestire un non-membro su una partita pubblica).
+  Future<List<MatchSummary>> getNearbyOpenSlotMatches() async {
+    if (isDemo) return const [];
+    final rows = await client!.rpc('get_nearby_open_slot_matches');
+    return (rows as List<dynamic>).map((raw) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      return MatchSummary(
+        id: row['match_id'].toString(),
+        leagueId: row['league_id'].toString(),
+        leagueName: row['league_name']?.toString() ?? 'Lega Kickly',
+        leagueSlug: row['league_slug']?.toString() ?? '',
+        title: row['title']?.toString() ?? 'Partita',
+        startsAt: asDate(row['starts_at']),
+        locationName: row['location_name']?.toString() ?? '',
+        city: row['city']?.toString() ?? '',
+        province: row['province']?.toString(),
+        footballFormat: row['football_format']?.toString() ?? '5v5',
+        maxPlayers: asInt(row['max_players'], 10),
+        goingCount: asInt(row['going_count']),
+        status: row['status']?.toString() ?? 'open',
+        visibility: 'public',
+        registrationClosedAt: null,
+        currentResponse: null,
+        // Sempre false per costruzione: la RPC esclude esplicitamente le
+        // leghe di cui il chiamante è già membro (altrimenti duplicherebbe
+        // "In programma"), quindi ogni riga qui è per forza di una lega
+        // esterna.
+        isLeagueMember: false,
+        distanceKm: row['distance_km'] == null
+            ? null
+            : asDouble(row['distance_km']),
+        coverImageUrl: row['cover_image_url']?.toString(),
+      );
+    }).toList();
+  }
+
   Future<List<MatchSummary>> getLeagueMatches(LeagueSummary league) async {
     if (isDemo) {
       return demoMatches.where((match) => match.leagueId == league.id).toList();
@@ -1354,6 +1394,13 @@ class KicklyRepository {
             .where((match) => !match.isPast)
             .toList()
           ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    // Sezione supplementare, non essenziale: se la RPC fallisce (rete,
+    // profilo senza posizione impostata) la home deve comunque caricare
+    // tutto il resto. Un errore qui non è mai motivo per mostrare la
+    // schermata di errore dell'intera dashboard.
+    final openNearby = await getNearbyOpenSlotMatches().catchError(
+      (_) => const <MatchSummary>[],
+    );
     LastMatchSummary? lastMatch;
     if (lastStats != null) {
       final row = await client!
@@ -1394,6 +1441,7 @@ class KicklyRepository {
       leagues: leagues.take(4).toList(),
       lastMatch: lastMatch,
       nearby: matches.skip(1).take(4).toList(),
+      openNearby: openNearby,
     );
   }
 

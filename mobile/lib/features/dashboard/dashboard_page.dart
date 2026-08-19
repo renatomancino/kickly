@@ -158,6 +158,31 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               const SizedBox(height: _kSectionGap),
 
+              // --- Scoperta: partite pubbliche vicine con un posto libero ---
+              // Niente stato vuoto qui, a differenza delle sezioni sopra: è
+              // una sezione di scoperta opportunistica, non una risposta a
+              // una domanda che l'utente si è posto aprendo l'app. Se non
+              // c'è nulla nel raggio non è un vuoto da colmare, è solo
+              // "oggi non c'è niente" — occupare spazio per dirlo
+              // aggiungerebbe rumore senza aggiungere valore.
+              if (data.openNearby.isNotEmpty) ...[
+                const SectionTitle(
+                  eyebrow: 'Vicino a te',
+                  title: 'Cercano un decimo',
+                ),
+                const SizedBox(height: _kTitleGap),
+                ...data.openNearby.map(
+                  (match) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: MatchCard(
+                      match: match,
+                      onTap: () => context.push('/matches/${match.id}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: _kSectionGap),
+              ],
+
               // --- Stagione: statistiche personali ---
               const SectionTitle(
                 eyebrow: 'La tua stagione',
