@@ -11,6 +11,11 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
+    # Codice di terze parti vendorizzato (vedi dependency_overrides in
+    # pubspec.yaml): è la copia di un pacchetto pub.dev, non lo si riscrive per
+    # farlo aderire alle lint di questo progetto, e le sue segnalazioni
+    # coprirebbero quelle del codice nostro.
+    - third_party/**
     - build/**
     - android/**
     - ios/**

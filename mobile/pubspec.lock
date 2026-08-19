@@ -204,10 +204,9 @@ packages:
   device_calendar:
     dependency: "direct main"
     description:
-      name: device_calendar
-      sha256: e5170a5a5a2027135705b099fe5f9b0dce415e27c94997b34e64f28de54e4226
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/device_calendar-3.9.0"
+      relative: true
+    source: path
     version: "3.9.0"
   fake_async:
     dependency: transitive
