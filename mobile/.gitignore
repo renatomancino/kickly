@@ -12,6 +12,15 @@
 .swiftpm/
 migrate_working_dir/
 
+# Stato di risoluzione SwiftPM salvato da Xcode dentro lo workspace condiviso
+# (project.xcworkspace/xcshareddata/swiftpm/, project.xcworkspace/xcuserdata/):
+# percorso diverso da .swiftpm/ sopra, quindi non coperto da quella riga.
+# Rigenerato ad ogni apertura del progetto in Xcode/simulatore, comparso come
+# non tracciato in ogni `git status` di questa sessione senza mai essere
+# davvero utile da versionare.
+**/xcshareddata/swiftpm/
+**/xcuserdata/
+
 # IntelliJ related
 *.iml
 *.ipr

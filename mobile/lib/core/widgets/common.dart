@@ -854,6 +854,21 @@ String friendlyError(Object error) {
   if (text.contains('public_league_not_found')) {
     return 'Questa lega non esiste più o non è più pubblica.';
   }
+  if (text.contains('location_required')) {
+    return 'Imposta la tua zona per entrare in questa lega: serve a '
+        'verificare che tu sia nelle vicinanze.';
+  }
+  if (text.contains('league_too_far')) {
+    // join_public_league appende la distanza reale ("league_too_far:83"):
+    // "sei a 83 km, il limite è 50" spiega perché è stato rifiutato invece
+    // di far sembrare un errore casuale. Se il numero non si trova (RPC
+    // futura senza suffisso) il messaggio resta comunque corretto, solo
+    // meno preciso.
+    final km = RegExp(r'league_too_far:(\d+)').firstMatch(text)?.group(1);
+    return km == null
+        ? 'Questa lega è troppo lontana: puoi entrare solo se sei nel raggio consentito.'
+        : 'Questa lega è troppo lontana: sei a circa $km km, il limite per entrare da solo è 50 km.';
+  }
   if (text.contains('owner_cannot_leave')) {
     return 'Sei il proprietario: trasferisci prima la lega a un altro membro, poi potrai uscire.';
   }

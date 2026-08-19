@@ -74,6 +74,10 @@ const _traduzioniAttese = <String, String>{
   'membership_banned':
       'Non puoi rientrare in questa lega: un admin ti ha rimosso.',
   'public_league_not_found': 'Questa lega non esiste più o non è più pubblica.',
+  'location_required':
+      'Imposta la tua zona per entrare in questa lega: serve a '
+      'verificare che tu sia nelle vicinanze.',
+  'league_too_far': 'Questa lega è troppo lontana: puoi entrare solo se sei nel raggio consentito.',
   'owner_cannot_leave': 'Sei il proprietario: trasferisci prima la lega a un altro membro, poi potrai uscire.',
   'member_not_found': 'Questo giocatore non fa parte della lega.',
   'cannot_remove_owner': 'Il proprietario della lega non può essere rimosso.',
@@ -162,6 +166,21 @@ void main() {
       expect(
         friendlyError(_erroreSupabase('team_b_goals_mismatch:0:1')),
         atteso,
+      );
+    });
+
+    test('la distanza appesa a league_too_far arriva leggibile nel messaggio, non solo il rifiuto', () {
+      // join_public_league solleva `league_too_far:%`, con la distanza reale
+      // arrotondata appesa (es. `league_too_far:83`): dire "sei a 83 km" è
+      // molto più utile di un generico "troppo lontano" per chi non sa se
+      // gli mancano 2 km o 200.
+      expect(
+        friendlyError(_erroreSupabase('league_too_far:83')),
+        'Questa lega è troppo lontana: sei a circa 83 km, il limite per entrare da solo è 50 km.',
+      );
+      expect(
+        friendlyError(_erroreSupabase('league_too_far:412')),
+        'Questa lega è troppo lontana: sei a circa 412 km, il limite per entrare da solo è 50 km.',
       );
     });
 

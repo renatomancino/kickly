@@ -354,6 +354,9 @@ class KicklyRepository {
     required String visibility,
     required String footballFormat,
     required int maxMembers,
+    String? province,
+    double? latitude,
+    double? longitude,
     Uint8List? logoBytes,
     String? logoExtension,
   }) async {
@@ -369,6 +372,9 @@ class KicklyRepository {
         'league_visibility': visibility,
         'league_format': footballFormat,
         'league_max_members': maxMembers,
+        'league_province': ?province,
+        'league_latitude': ?latitude,
+        'league_longitude': ?longitude,
       },
     );
     final rows = data as List<dynamic>? ?? const [];
