@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: subosito/flutter-action@v2
         with:
@@ -124,9 +124,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           # Cache del tarball npm basata su package-lock.json: `npm ci` continua a
@@ -186,7 +186,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # JDK 21: mobile/android/app/build.gradle.kts fissa source/targetCompatibility e
       # jvmTarget a 17, ma quello e' il BYTECODE prodotto, non la JVM che esegue Gradle.
@@ -213,7 +213,7 @@ jobs:
       # nel nome. Senza citarli, cambiare la versione di Gradle o i jvmargs non
       # invaliderebbe la cache.
       - name: Cache Gradle
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
@@ -293,7 +293,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Usiamo il binario ufficiale invece dell'action `gitleaks/gitleaks-action`, che per
       # gli account Organization richiede un secret GITLEAKS_LICENSE: sulle PR da fork i
@@ -336,9 +336,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -362,7 +362,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Serve la storia completa: senza, `git merge-base` non ha abbastanza commit per
           # trovare il punto di divergenza fra il branch e la base.
