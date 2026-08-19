@@ -1,0 +1,73 @@
+# Aggiornamento automatico delle dipendenze.
+#
+# PERCHE' SERVE: il job `npm audit` in ci.yml segnala una vulnerabilità quando è
+# già lì, ma non la risolve, e nessuno apre un aggiornamento di sua iniziativa fra
+# una funzionalità e l'altra. Dependabot apre la PR da solo, la CI la verifica, e
+# aggiornare diventa una cosa che si fa in due minuti invece che un progetto a sé
+# dopo un anno di rinvii.
+#
+# DA SAPERE: questo file governa gli *aggiornamenti di versione*. Gli *avvisi di
+# sicurezza* (Dependabot alerts) sono invece un interruttore nelle impostazioni del
+# repository e vanno attivati a parte, da chi ha permessi di amministratore.
+version: 2
+
+updates:
+  # --- PWA Next.js (package.json alla radice) ---
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Raggruppate per non ritrovarsi quindici PR aperte il lunedì mattina: le
+    # patch e le minor entrano tutte insieme, perché è raro che una singola meriti
+    # una revisione a sé.
+    groups:
+      npm-minori:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+    ignore:
+      # I major restano manuali: su Next.js e React un salto di major significa
+      # cambi di API e va pianificato, non subito il lunedì da un bot.
+      - dependency-name: 'next'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'react'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'react-dom'
+        update-types: [version-update:semver-major]
+
+  # --- App Flutter (mobile/pubspec.yaml) ---
+  - package-ecosystem: pub
+    directory: /mobile
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      pub-minori:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+    ignore:
+      # Entrambe sono pinnate DELIBERATAMENTE per risolvere build Android
+      # realmente rotte: flutter_secure_storage 11 punta a un'API level Android
+      # che non esiste, e flutter_local_notifications è indietro di più major.
+      # Un aggiornamento automatico qui rimetterebbe la build nello stato da cui
+      # siamo usciti; vanno alzate a mano, con un test su device vero.
+      - dependency-name: 'flutter_secure_storage'
+      - dependency-name: 'flutter_local_notifications'
+
+  # --- Action usate nei workflow ---
+  # Le action invecchiano in silenzio: è già successo in questo repo, con tre
+  # action ferme su Node 20 che i runner forzavano su Node 24 con un avviso di
+  # deprecazione. Con questa voce l'avviso diventa una PR.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci(deps)

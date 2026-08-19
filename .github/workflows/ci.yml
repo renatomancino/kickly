@@ -23,8 +23,15 @@ on:
   # I branch di lavoro girano gia' sul fork, PRIMA di aprire la PR. Costa poco (repo
   # pubblici, minuti Actions gratuiti) ed evita il caso peggiore: scoprire che la build
   # e' rotta quando la review e' gia' iniziata e il contesto mentale e' su altro.
+  # Anche su main, e per due motivi distinti. Il primo: un merge è un push su
+  # main, e una PR verde può comunque rompere main se nel frattempo è entrato
+  # dell'altro (conflitto semantico, non testuale) — senza questo nessuno se ne
+  # accorgerebbe. Il secondo è pratico: GitHub propone un check fra quelli
+  # "obbligatori" nelle regole di branch solo dopo che ha girato almeno una
+  # volta su quel repository. Finché la CI non parte sull'upstream, l'elenco da
+  # cui scegliere resta vuoto e la branch protection non è configurabile.
   push:
-    branches: ['claude/**']
+    branches: [main, 'claude/**']
 
 # Least privilege esplicito. Nessun job di questa pipeline scrive nulla: dichiararlo qui
 # vale anche come documentazione, e impedisce che un job aggiunto domani erediti per

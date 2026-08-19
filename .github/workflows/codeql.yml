@@ -1,0 +1,70 @@
+# Analisi statica di sicurezza (CodeQL).
+#
+# COSA FA E PERCHE' NON SI SOVRAPPONE A `ci.yml`
+# La pipeline in ci.yml verifica che il codice *funzioni*: compila, i test passano,
+# i tipi tornano, non ci sono segreti committati. CodeQL verifica una cosa diversa,
+# che nessuno di quei job può vedere: se il codice, pur funzionando benissimo, è
+# *sfruttabile*. Cerca percorsi in cui un dato controllato da chi usa l'app arriva
+# fino a un punto pericoloso — una query, un redirect, una risposta HTML, un comando
+# — senza essere validato per strada. Su un'app con 25 route API che parlano con un
+# database è esattamente la classe di problema che conviene sorvegliare.
+#
+# LIMITE DA CONOSCERE: CodeQL non supporta Dart, quindi l'app Flutter in mobile/ NON
+# è coperta. Qui si analizza soltanto la PWA Next.js in src/ — dove però vivono le
+# route API e il middleware, cioè la superficie esposta a internet. Il codice Flutter
+# resta coperto da `flutter analyze` e dalle regole in mobile/analysis_options.yaml.
+#
+# NOTA SUI COSTI: gratuito e illimitato perché il repository è pubblico.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Settimanale, e non è ridondante rispetto ai due trigger sopra: le regole di
+  # CodeQL vengono aggiornate di continuo, quindi codice che oggi risulta pulito
+  # può risultare vulnerabile fra un mese senza che nessuno lo abbia toccato.
+  # Senza questa riga quel codice non verrebbe più rianalizzato mai più.
+  schedule:
+    - cron: '0 6 * * 1'
+
+# Least privilege esplicito: `security-events: write` è l'unico permesso in più
+# rispetto alla sola lettura, e serve soltanto a caricare i risultati nella scheda
+# Security del repository.
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL (JavaScript/TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Inizializza CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # `security-and-quality` invece del set predefinito: aggiunge alle query
+          # di sicurezza anche quelle di qualità/correttezza (confronti sempre
+          # falsi, codice irraggiungibile, promise non attese). Il rumore in più
+          # è contenuto, e su un progetto giovane sono proprio gli errori che
+          # capita di scrivere.
+          queries: security-and-quality
+
+      # Nessun passo di build esplicito: JavaScript e TypeScript sono linguaggi
+      # interpretati per CodeQL, che analizza direttamente i sorgenti. Aggiungere
+      # `npm ci && npm run build` qui allungherebbe il job di minuti senza cambiare
+      # di una virgola il risultato dell'analisi.
+      - name: Analizza
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'

@@ -25,16 +25,32 @@ Sono cinque minuti, una volta sola.
    | `Secret scan (gitleaks)` | chiavi e credenziali committate per sbaglio |
    | `npm audit` | dipendenze npm con vulnerabilità di livello alto |
    | `Migrazioni immutabili` | modifiche a migrazioni Supabase già applicate in produzione |
+   | `CodeQL (JavaScript/TypeScript)` | vulnerabilità nel codice della PWA: input non validato che arriva a una query, un redirect o una risposta |
 
-   > I nomi compaiono nell'elenco solo dopo che il workflow è girato almeno una
-   > volta sul repository. Se la lista è vuota, apri una PR qualsiasi, aspetta
-   > che la CI parta e poi torna qui.
+   > I nomi qui sopra sono quelli **verificati** che compaiono nell'elenco di
+   > GitHub: la CI ha già girato su questo repository (PR #3), quindi la lista
+   > non è più vuota e i check si possono selezionare subito.
+
+   **Da NON rendere obbligatorio**: `copilot-pull-request-reviewer`. La review di
+   Copilot lascia commenti di merito, non un esito verde/rosso: renderla
+   bloccante significherebbe non poter unire una PR finché un giudizio
+   soggettivo non viene risolto. Vale come parere, non come cancello — e
+   funziona già da sola su ogni PR, senza configurazione.
 
 4. Attiva anche **Require branches to be up to date before merging**: senza
    questa, una PR può risultare verde su una base ormai vecchia e rompere `main`
    una volta unita.
 5. Consigliato: **Require a pull request before merging**, così nessuno spinge
    direttamente su `main` scavalcando del tutto la CI.
+
+## L'altro interruttore da accendere, mentre sei nelle impostazioni
+
+`Settings` → `Advanced Security` (o `Code security`) → **Dependabot alerts**.
+
+È una cosa diversa dal file `.github/dependabot.yml` già nel repository: quel
+file governa gli *aggiornamenti di versione* programmati, questo interruttore
+attiva gli *avvisi* quando salta fuori una vulnerabilità nota in una dipendenza
+che stiamo già usando. Il primo è manutenzione ordinaria, il secondo è l'allarme.
 
 ## Cosa NON serve
 
