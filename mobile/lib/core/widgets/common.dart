@@ -92,8 +92,20 @@ class PlayerAvatar extends StatelessWidget {
       backgroundColor: AppTheme.surfaceHigh,
       foregroundColor: AppTheme.primary,
       backgroundImage: url == null ? null : CachedNetworkImageProvider(url!),
+      // Le iniziali sono un ripiego grafico per la foto mancante, non un
+      // contenuto: un lettore di schermo le sillabava lettera per lettera
+      // ("emme, ci") subito prima del nome per esteso, che in ogni uso di
+      // questo widget sta lì accanto (ListTile, riga della rosa, testata del
+      // profilo). ExcludeSemantics e non un `Semantics(label: name)`: qui
+      // l'informazione non manca, è già raggiungibile dal testo vicino —
+      // etichettare l'avatar col nome lo farebbe solo annunciare due volte.
       child: url == null
-          ? Text(initials, style: const TextStyle(fontWeight: FontWeight.w900))
+          ? ExcludeSemantics(
+              child: Text(
+                initials,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            )
           : null,
     );
   }
@@ -406,13 +418,20 @@ class LeagueLogo extends StatelessWidget {
               ),
       ),
       alignment: Alignment.center,
+      // Stesso ragionamento di PlayerAvatar: l'iniziale è il segnaposto del
+      // logo mancante, e il nome della lega è sempre subito accanto (elenco
+      // leghe, dashboard, testata del dettaglio) o già dichiarato dal
+      // pulsante che contiene il logo (impostazioni lega). Senza questo il
+      // lettore di schermo premette una lettera isolata a ogni voce.
       child: league.logoUrl == null
-          ? Text(
-              league.name.isEmpty ? 'K' : league.name[0].toUpperCase(),
-              style: TextStyle(
-                color: AppTheme.primary,
-                fontSize: size * .38,
-                fontWeight: FontWeight.w900,
+          ? ExcludeSemantics(
+              child: Text(
+                league.name.isEmpty ? 'K' : league.name[0].toUpperCase(),
+                style: TextStyle(
+                  color: AppTheme.primary,
+                  fontSize: size * .38,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             )
           : null,
@@ -812,6 +831,95 @@ String friendlyError(Object error) {
   if (text.contains('membership_required')) {
     return 'Devi essere membro della lega per eseguire questa azione.';
   }
+  if (text.contains('owner_required')) {
+    return 'Solo il proprietario della lega può eseguire questa azione.';
+  }
+  // DOPO `confirmed_participant_required`, che lo contiene come sottostringa:
+  // invertirli manderebbe chi non ha confermato la presenza nel messaggio
+  // sbagliato. C'è un test che pinna questo vincolo d'ordine.
+  if (text.contains('participant_required')) {
+    return 'Solo chi partecipa alla partita può eseguire questa azione.';
+  }
+
+  // Ingresso e uscita da una lega. Sono i codici che un utente incontra
+  // facendo tutto giusto — un invito già usato, una lega diventata pubblica —
+  // e proprio per questo il messaggio generico qui era il più dannoso: non
+  // dice cos'è successo né cosa fare dopo.
+  if (text.contains('already_member')) {
+    return 'Fai già parte di questa lega.';
+  }
+  if (text.contains('membership_banned')) {
+    return 'Non puoi rientrare in questa lega: un admin ti ha rimosso.';
+  }
+  if (text.contains('public_league_not_found')) {
+    return 'Questa lega non esiste più o non è più pubblica.';
+  }
+  if (text.contains('owner_cannot_leave')) {
+    return 'Sei il proprietario: trasferisci prima la lega a un altro membro, poi potrai uscire.';
+  }
+  if (text.contains('member_not_found')) {
+    return 'Questo giocatore non fa parte della lega.';
+  }
+  if (text.contains('cannot_remove_owner')) {
+    return 'Il proprietario della lega non può essere rimosso.';
+  }
+  if (text.contains('cannot_change_owner_role')) {
+    return 'Il ruolo del proprietario non si può cambiare: serve trasferire la lega.';
+  }
+  if (text.contains('already_owner')) {
+    return 'Questo giocatore è già il proprietario della lega.';
+  }
+
+  // Limiti di frequenza: qui il messaggio generico è particolarmente cattivo
+  // perché invita a "riprovare tra poco" senza dire quanto, e l'utente riprova
+  // subito continuando a fallire.
+  if (text.contains('communication_rate_limited')) {
+    return 'Hai pubblicato un avviso da poco: aspetta qualche minuto prima del prossimo.';
+  }
+  if (text.contains('reminder_rate_limited')) {
+    return 'Hai già inviato un promemoria da poco: aspetta prima di inviarne un altro.';
+  }
+  if (text.contains('no_reminder_recipients')) {
+    return 'Nessuno da avvisare: non ci sono giocatori a cui mandare il promemoria.';
+  }
+  if (text.contains('communication_not_found')) {
+    return 'Questo avviso è già stato eliminato.';
+  }
+
+  // Dati rifiutati dal server. Ognuno indica il campo da correggere: senza,
+  // l'utente rilegge un modulo intero senza sapere dove ha sbagliato.
+  if (text.contains('invalid_max_members')) {
+    return 'Il numero massimo di membri non è valido.';
+  }
+  if (text.contains('invalid_max_players')) {
+    return 'Il numero massimo di giocatori non è valido.';
+  }
+  if (text.contains('invalid_coordinates')) {
+    return 'Non siamo riusciti a individuare il luogo scelto: riprova a selezionarlo.';
+  }
+  if (text.contains('invalid_venue_phone')) {
+    return 'Il telefono della struttura non è valido.';
+  }
+  if (text.contains('invalid_communication')) {
+    return 'L’avviso deve avere un titolo e un testo.';
+  }
+  if (text.contains('invalid_reminder')) {
+    return 'Il promemoria non è valido.';
+  }
+  if (text.contains('invalid_location')) return 'Indica dove si gioca.';
+  if (text.contains('invalid_province')) return 'La provincia non è valida.';
+  if (text.contains('invalid_country')) return 'Il paese non è valido.';
+  if (text.contains('invalid_title')) return 'Il titolo non è valido.';
+  if (text.contains('invalid_name')) return 'Il nome non è valido.';
+  if (text.contains('invalid_slug')) {
+    return 'Esiste già una lega con un nome molto simile: scegline un altro.';
+  }
+  if (text.contains('invalid_city')) return 'La città non è valida.';
+  if (text.contains('invalid_cost')) return 'Il costo inserito non è valido.';
+  if (text.contains('invalid_role')) return 'Questo ruolo non esiste.';
+  if (text.contains('invalid_team')) return 'Questa squadra non esiste.';
+  if (text.contains('invalid_action')) return 'Azione non riconosciuta.';
+  if (text.contains('invalid_response')) return 'Risposta non riconosciuta.';
 
   // Volutamente in fondo: 'username' è una parola comune e prima intercettava
   // errori che non avevano nulla a che fare con la registrazione.
