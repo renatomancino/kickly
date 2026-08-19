@@ -130,9 +130,12 @@ class _MatchContent extends StatelessWidget {
     final summary = match.summary;
     final date = DateFormat('EEEE d MMMM y', 'it_IT').format(summary.startsAt);
     final time = DateFormat('HH:mm').format(summary.startsAt);
-    // Usata sia dalla riga dei chip (per decidere il colore dello stato, a
-    // valle) sia dal testo dei posti sotto la barra di riempimento: tenerla
-    // qui evita di ricalcolare lo stesso confronto due volte.
+    // Conteggio, non stato: la pillola qui sotto legge `summary.status`, che
+    // lo decide il server, mentre questo confronto serve solo al testo dei
+    // posti liberi. Sono due cose diverse di proposito — una partita può
+    // essere 'open' con i posti esauriti, e il testo deve dirlo anche se la
+    // pillola resta verde. `maxPlayers > 0` evita di dichiarare piena una
+    // partita senza capienza impostata.
     final isFull =
         summary.maxPlayers > 0 && summary.goingCount >= summary.maxPlayers;
     return DefaultTabController(
@@ -146,7 +149,12 @@ class _MatchContent extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(21),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    // Lo stesso raggio della Card che lo contiene, preso dal
+                    // token invece che da un 20 scritto a mano: la Card ritaglia
+                    // a 18, quindi con 20 il gradiente veniva tagliato e agli
+                    // angoli restava un filo di superficie piatta al posto
+                    // della sfumatura.
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                     gradient: LinearGradient(
                       colors: [
                         AppTheme.primary.withValues(alpha: .12),
@@ -161,7 +169,15 @@ class _MatchContent extends StatelessWidget {
                     children: [
                       if (match.coverImageUrl?.isNotEmpty == true) ...[
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(15),
+                          // radiusMd e non radiusLg: questa copertina sta
+                          // DENTRO la card, e un elemento annidato con lo stesso
+                          // raggio del contenitore sembra una seconda card
+                          // incastrata. Il raggio piu' stretto lo tiene
+                          // subordinato. (La foto del campo piu' in basso, che
+                          // invece sta al livello delle card, usa radiusLg.)
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMd,
+                          ),
                           child: CachedNetworkImage(
                             imageUrl: match.coverImageUrl!,
                             height: 170,
@@ -175,44 +191,53 @@ class _MatchContent extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          // Lo stato viene prima del formato: è l'unico dei
-                          // chip che cambia nel tempo (aperta -> completa ->
-                          // conclusa/annullata), quindi è quello che l'occhio
-                          // deve trovare per primo. Una pillola colorata al
-                          // posto del Chip grigio standard, con la stessa
-                          // "voce" delle pillole di risposta/distanza usate
-                          // dalla card partite in lista.
-                          _StatusPill(status: summary.status),
-                          Chip(
-                            label: Text(
-                              summary.footballFormat.replaceAll('v', ' vs '),
+                          // Lo stato viene per primo: è l'unica di queste
+                          // etichette che cambia nel tempo (aperta -> completa
+                          // -> conclusa/annullata), quindi è quella che l'occhio
+                          // deve trovare per prima. Pillola colorata, con la
+                          // stessa "voce" delle pillole di risposta/distanza
+                          // usate dalla card partite in lista.
+                          _StatusPill.matchStatus(summary.status),
+                          // Il formato è un attributo fisso della partita, non
+                          // uno stato: pillola neutra del design system, così
+                          // non compete con lo stato qui accanto. Prima era un
+                          // Chip di Material, cioè il linguaggio vecchio che
+                          // stiamo togliendo.
+                          InfoPill(
+                            label: summary.footballFormat.replaceAll(
+                              'v',
+                              ' vs ',
                             ),
+                            icon: Icons.sports_soccer,
                           ),
+                          // Anche il campo prenotato è uno stato, quindi resta
+                          // colorato — ma tinto come le altre pillole invece che
+                          // a fondo verde pieno. Riempito era l'elemento più
+                          // urlato dell'intera testata e schiacciava proprio lo
+                          // stato della partita, che è ciò da cui dipende la
+                          // decisione di giocare; la prenotazione ha già una sua
+                          // card verde nella scheda Dettagli, qui basta il
+                          // fatto.
                           if (match.fieldBookedAt != null)
-                            const Chip(
-                              backgroundColor: AppTheme.primary,
-                              side: BorderSide.none,
-                              avatar: Icon(
-                                Icons.verified,
-                                size: 16,
-                                color: AppTheme.background,
-                              ),
-                              labelStyle: TextStyle(
-                                color: AppTheme.background,
-                                fontWeight: FontWeight.w900,
-                              ),
-                              label: Text('Campo prenotato'),
-                            ),
+                            const _StatusPill.fieldBooked(),
                         ],
                       ),
                       const SizedBox(height: 12),
+                      // Titolo e nome lega li scrivono gli utenti: senza un
+                      // tetto alle righe un nome fiume in headlineMedium
+                      // spingeva data, luogo e barra dei posti sotto la piega,
+                      // cioè proprio i dati per cui si apre questa pagina.
                       Text(
                         summary.title,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         summary.leagueName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: AppTheme.muted),
                       ),
                       const SizedBox(height: 20),
@@ -238,7 +263,17 @@ class _MatchContent extends StatelessWidget {
                             color: AppTheme.primary,
                           ),
                           const SizedBox(width: 9),
-                          Expanded(child: Text(summary.locationName)),
+                          // Anche il nome del campo è testo utente: due righe
+                          // al massimo, poi ellissi, altrimenti una struttura
+                          // con un nome lunghissimo allontanava la barra dei
+                          // posti dal blocco data/luogo a cui appartiene.
+                          Expanded(
+                            child: Text(
+                              summary.locationName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 19),
@@ -341,28 +376,65 @@ class _MatchTabDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_MatchTabDelegate oldDelegate) => false;
 }
 
-/// Pillola di stato colorata per l'intestazione del dettaglio partita.
+/// Pillola colorata per gli STATI di questa schermata.
 ///
-/// Stessa forma delle pillole di risposta/distanza di [MatchCard] (radius a
-/// pillola, colore pieno sul testo, sfondo tenue): è il modo in cui la
-/// testata del dettaglio parla la stessa lingua visiva della card in lista,
-/// invece del Chip grigio generico che c'era prima e che rendeva "aperta",
-/// "completa" e "annullata" tutte uguali a un primo sguardo.
+/// Stessa forma delle pillole di risposta/distanza di [MatchCard] (raggio a
+/// pillola, colore pieno sul testo, sfondo tenue): è il modo in cui il dettaglio
+/// parla la stessa lingua visiva della card in lista, invece dei Chip grigi di
+/// Material che rendevano "aperta", "completa" e "annullata" tutte uguali a un
+/// primo sguardo.
+///
+/// I tre costruttori nominati esistono per non moltiplicare pillole quasi
+/// identiche: stato partita, campo prenotato e risposta di un giocatore sono la
+/// stessa cosa (un valore che cambia nel tempo) e devono avere lo stesso peso
+/// visivo — cambia solo la mappa valore -> colore. Averne tre classi separate
+/// era il modo sicuro per farle divergere alla prima modifica.
+///
+/// Il colore non è decorazione: verde = confermato, oro = in sospeso, rosso =
+/// fuori, grigio = ininfluente. È la stessa scala in tutte e tre le varianti.
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+  /// Variante col pallino: `icon` è fissata a null qui e non esposta come
+  /// parametro, altrimenti resterebbe un'opzione che nessuno passa (l'unica
+  /// pillola con icona ha il suo costruttore dedicato più sotto).
+  const _StatusPill._({required this.color, required this.label}) : icon = null;
 
-  final String status;
+  /// Stato della partita, in testata.
+  factory _StatusPill.matchStatus(String status) => _StatusPill._(
+    color: switch (status) {
+      'open' => AppTheme.primary,
+      'full' => AppTheme.gold,
+      'cancelled' => AppTheme.danger,
+      _ => AppTheme.muted, // 'completed' e stati non previsti
+    },
+    label: _statusLabel(status),
+  );
 
-  Color get _color => switch (status) {
-    'open' => AppTheme.primary,
-    'full' => AppTheme.gold,
-    'cancelled' => AppTheme.danger,
-    _ => AppTheme.muted, // 'completed' e stati non previsti
-  };
+  /// Risposta di un giocatore nell'elenco.
+  factory _StatusPill.response(String response) => _StatusPill._(
+    color: switch (response) {
+      'going' => AppTheme.primary,
+      'waitlist' => AppTheme.gold,
+      'not_going' => AppTheme.danger,
+      _ => AppTheme.muted, // 'maybe' e risposte non previste
+    },
+    label: _responseLabel(response),
+  );
+
+  /// Campo prenotato: unico valore possibile, quindi costruttore const e
+  /// nessun parametro. L'icona sostituisce il pallino perché qui il colore da
+  /// solo direbbe "verde come lo stato aperto" e le due pillole, affiancate in
+  /// testata, si confonderebbero.
+  const _StatusPill.fieldBooked()
+    : color = AppTheme.primary,
+      label = 'Campo prenotato',
+      icon = Icons.verified;
+
+  final Color color;
+  final String label;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    final color = _color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -373,18 +445,30 @@ class _StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
+          if (icon != null)
+            Icon(icon, size: 13, color: color)
+          else
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
           const SizedBox(width: 6),
-          Text(
-            _statusLabel(status),
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+          // Flexible + ellissi: la pillola si dimensiona sul contenuto, ma
+          // `_statusLabel` e `_responseLabel` ricadono sul valore grezzo del
+          // database per i casi non previsti, quindi l'etichetta è di fatto
+          // una stringa arbitraria. Senza questo, un valore nuovo lato server
+          // sfonderebbe la pillola.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -495,6 +579,8 @@ class _DetailsTab extends StatelessWidget {
                     const SizedBox(height: 7),
                     Text(
                       _mvpName(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const Text(
@@ -518,12 +604,21 @@ class _DetailsTab extends StatelessWidget {
                       children: match.participants
                           .where((p) => p.response == 'going')
                           .map(
+                            // ChoiceChip resta un Chip di Material di
+                            // proposito: qui non è un'etichetta ma un comando a
+                            // selezione singola, con la semantica di scelta che
+                            // i lettori di schermo annunciano. Le pillole del
+                            // design system sono decorative e non la danno.
                             (player) => ChoiceChip(
                               selected:
                                   match.postGame!.ownVotePlayerId ==
                                   player.userId,
                               onSelected: (_) => _vote(context, player.userId),
-                              label: Text(player.displayName),
+                              label: Text(
+                                player.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -542,6 +637,77 @@ class _DetailsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
+        ],
+        // La conferma di presenza sta PRIMA degli strumenti admin, non dopo.
+        // È la ragione per cui si apre questa schermata, e chi gestisce la lega
+        // è quasi sempre anche un giocatore: con l'ordine di prima, un
+        // admin-giocatore trovava per primo un blocco di comandi di gestione —
+        // fra cui l'unico bottone verde pieno della pagina, "Chiudi partita" —
+        // e solo scorrendo oltre la domanda a cui deve rispondere davvero. Il
+        // verde più forte finiva così sull'azione che archivia la partita
+        // invece che su quella che la fa giocare.
+        if (isOpen && summary.isLeagueMember) ...[
+          const SectionTitle(title: 'Ci sarai?', eyebrow: 'Conferma presenza'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ResponseButton(
+                  label: 'Ci sono',
+                  icon: Icons.check_circle_outline,
+                  selected: summary.currentResponse == 'going',
+                  onTap: responding ? null : () => onRespond('going'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ResponseButton(
+                  label: 'Forse',
+                  icon: Icons.help_outline,
+                  selected: summary.currentResponse == 'maybe',
+                  onTap: responding ? null : () => onRespond('maybe'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ResponseButton(
+                  label: 'Non posso',
+                  icon: Icons.cancel_outlined,
+                  selected: summary.currentResponse == 'not_going',
+                  onTap: responding ? null : () => onRespond('not_going'),
+                ),
+              ),
+            ],
+          ),
+          if (responding)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: LinearProgressIndicator(),
+            ),
+          const SizedBox(height: 24),
+        ] else if (summary.isLeagueMember &&
+            summary.registrationClosedAt != null &&
+            (summary.status == 'open' || summary.status == 'full')) ...[
+          // Spiega perche' i bottoni di conferma presenza non ci sono,
+          // invece di lasciare un vuoto silenzioso dove prima c'erano.
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_clock_outlined, color: AppTheme.muted),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Le iscrizioni a questa partita sono chiuse: non puoi più cambiare la tua presenza.',
+                      style: TextStyle(color: AppTheme.muted, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
         ],
         if (match.canManage) ...[
           const SectionTitle(
@@ -607,69 +773,6 @@ class _DetailsTab extends StatelessWidget {
           ),
           const SizedBox(height: 24),
         ],
-        if (isOpen && summary.isLeagueMember) ...[
-          const SectionTitle(title: 'Ci sarai?', eyebrow: 'Conferma presenza'),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ResponseButton(
-                  label: 'Ci sono',
-                  icon: Icons.check_circle_outline,
-                  selected: summary.currentResponse == 'going',
-                  onTap: responding ? null : () => onRespond('going'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ResponseButton(
-                  label: 'Forse',
-                  icon: Icons.help_outline,
-                  selected: summary.currentResponse == 'maybe',
-                  onTap: responding ? null : () => onRespond('maybe'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ResponseButton(
-                  label: 'Non posso',
-                  icon: Icons.cancel_outlined,
-                  selected: summary.currentResponse == 'not_going',
-                  onTap: responding ? null : () => onRespond('not_going'),
-                ),
-              ),
-            ],
-          ),
-          if (responding)
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
-              child: LinearProgressIndicator(),
-            ),
-          const SizedBox(height: 24),
-        ] else if (summary.isLeagueMember &&
-            summary.registrationClosedAt != null &&
-            (summary.status == 'open' || summary.status == 'full')) ...[
-          // Spiega perche' i bottoni di conferma presenza non ci sono,
-          // invece di lasciare un vuoto silenzioso dove prima c'erano.
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_clock_outlined, color: AppTheme.muted),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Le iscrizioni a questa partita sono chiuse: non puoi più cambiare la tua presenza.',
-                      style: TextStyle(color: AppTheme.muted, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
         if (match.venuePhone?.isNotEmpty == true) ...[
           _FieldBookingCard(
             match: match,
@@ -680,7 +783,11 @@ class _DetailsTab extends StatelessWidget {
         ],
         if (match.venueImageUrl?.isNotEmpty == true) ...[
           ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            // radiusLg: questa foto non è dentro una card, è una sorella delle
+            // card nella lista. Con il 20 di prima aveva angoli leggermente più
+            // aperti della card di prenotazione che le sta appena sopra, e
+            // nella colonna si notava come un allineamento sbagliato.
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             child: CachedNetworkImage(
               imageUrl: match.venueImageUrl!,
               width: double.infinity,
@@ -871,6 +978,8 @@ class _PostGameStats extends StatelessWidget {
                 ),
                 title: Text(
                   player?.displayName ?? 'Giocatore',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 subtitle: Text(
@@ -909,37 +1018,52 @@ class _ResponseButton extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(15),
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 5),
-      decoration: BoxDecoration(
-        color: selected
-            ? AppTheme.primary.withValues(alpha: .14)
-            : AppTheme.surface,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: selected ? AppTheme.primary : AppTheme.outline,
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: selected ? AppTheme.primary : AppTheme.muted),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              // `AppTheme.muted` come l'icona qui sopra: prima la label usava
-              // `Colors.white70`, un grigio leggermente diverso da quello
-              // dell'icona nello stesso pulsante.
-              color: selected ? AppTheme.primary : AppTheme.muted,
-            ),
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    decoration: BoxDecoration(
+      color: selected
+          ? AppTheme.primary.withValues(alpha: .14)
+          : AppTheme.surface,
+      // radiusMd: nel design system è il raggio di pulsanti e campi, e questo
+      // è un pulsante. Prima era un 15 scritto a mano, cioè un valore che non
+      // combaciava con nessun altro angolo della schermata.
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      border: Border.all(color: selected ? AppTheme.primary : AppTheme.outline),
+    ),
+    // L'InkWell sta DENTRO al contenitore, con un Material trasparente sopra
+    // cui appoggiare l'onda. Prima stava fuori: l'onda del tocco veniva
+    // disegnata nel Material della pagina, quindi sotto allo sfondo opaco del
+    // pulsante, e spariva del tutto. Nessun riscontro visivo proprio sulle tre
+    // uniche azioni che cambiano stato in questa schermata — con la rete
+    // lenta, sembravano tap andati a vuoto.
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        // Stesso raggio del contenitore: se differisce, l'onda esce dagli
+        // angoli arrotondati.
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 5),
+          child: Column(
+            children: [
+              Icon(icon, color: selected ? AppTheme.primary : AppTheme.muted),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  // `AppTheme.muted` come l'icona qui sopra: prima la label
+                  // usava `Colors.white70`, un grigio leggermente diverso da
+                  // quello dell'icona nello stesso pulsante.
+                  color: selected ? AppTheme.primary : AppTheme.muted,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -1245,12 +1369,27 @@ class _PlayersTab extends StatelessWidget {
               name: player.displayName,
               url: player.avatarUrl,
             ),
+            // Nome e username li scrivono gli utenti: senza tetto alle righe
+            // un nome lungo mandava a capo il titolo e faceva crescere la
+            // riga, rompendo il passo regolare che rende scorrevole l'elenco.
             title: Text(
               player.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            subtitle: Text('@${player.username} · ${player.overall} OVR'),
-            trailing: Chip(label: Text(_responseLabel(player.response))),
+            subtitle: Text(
+              '@${player.username} · ${player.overall} OVR',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // La risposta è uno stato, non un attributo, quindi pillola
+            // colorata e non InfoPill: con il Chip grigio di prima "Ci sarà" e
+            // "Non viene" erano identici a colpo d'occhio e l'elenco — che
+            // esiste proprio per contare chi c'è — andava letto riga per riga.
+            // Ora il verde si accende solo sui confermati, che l'ordinamento
+            // raggruppa già in cima: chi c'è si vede senza leggere.
+            trailing: _StatusPill.response(player.response),
           ),
         );
       },

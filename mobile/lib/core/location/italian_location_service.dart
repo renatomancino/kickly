@@ -273,7 +273,13 @@ class _ItalianMunicipalityFieldState extends State<ItalianMunicipalityField> {
                     onPressed: _search,
                     icon: const Icon(Icons.search),
                   )
-                : const Icon(Icons.verified, color: Color(0xFFC7FF3D)),
+                // Il verde arriva dal token, non da un esadecimale: quel
+                // 0xFFC7FF3D era la copia esatta di AppTheme.primary. Una
+                // copia però non si aggiorna quando si ritocca il verde del
+                // marchio, e questa spunta sarebbe rimasta l'unico pezzo di
+                // interfaccia con il colore vecchio, in un punto che si vede
+                // solo a comune selezionato: nessuno se ne sarebbe accorto.
+                : const Icon(Icons.verified, color: AppTheme.primary),
           ),
           validator: (_) => _selected == null
               ? 'Seleziona un comune dai risultati verificati.'
@@ -301,7 +307,12 @@ class _ItalianMunicipalityFieldState extends State<ItalianMunicipalityField> {
               // `borderRadius`, perché sarebbero due definizioni della stessa
               // cosa.
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                // radiusLg e non il 16 a mano: con il margine di 7px sopra,
+                // questo pannello non è attaccato al campo ma galleggia sopra
+                // il resto del form, quindi appartiene alla famiglia delle
+                // card e ne prende il raggio. Il 16 non corrispondeva a
+                // nessuna delle due scale del tema.
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                 side: const BorderSide(color: AppTheme.outline),
               ),
               child: ListView.separated(

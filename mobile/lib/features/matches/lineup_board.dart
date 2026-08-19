@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app.dart';
@@ -134,6 +135,16 @@ class _LineupBoardState extends State<LineupBoard> {
     String? success,
   }) async {
     if (_pending != null) return;
+    // Riscontro tattile su tutte e quattro le azioni della formazione (prendi
+    // slot, libera, fascia, modulo): passano tutte da qui, quindi la vibrazione
+    // sta in un punto solo invece di essere ricopiata — e non può finire per
+    // sbaglio su un tocco di sola navigazione, che è la regola dell'app.
+    // Sul tocco e non alla risposta della RPC: il campo è il punto in cui si
+    // tocca un bersaglio piccolo, e il riscontro deve arrivare mentre il dito è
+    // ancora giù, altrimenti non lo si collega più al proprio gesto.
+    // `unawaited`: aspettare il motore aptico ritarderebbe la chiamata di rete
+    // senza alcun beneficio.
+    unawaited(HapticFeedback.lightImpact());
     setState(() => _pending = key);
     try {
       final snapshot = await action();
@@ -190,6 +201,11 @@ class _LineupBoardState extends State<LineupBoard> {
   void _toggleCaptain() {
     final mine = _myAssignment();
     if (mine == null) {
+      // Anche questo ramo cambia stato, solo che il cambio resta in locale
+      // finché non scegli una posizione: senza il tocco aptico sarebbe l'unica
+      // delle azioni sulla fascia a non dare riscontro fisico, e la
+      // candidatura in sospeso è già la più difficile da percepire.
+      unawaited(HapticFeedback.lightImpact());
       setState(() => _wantsCaptain = !_wantsCaptain);
       return;
     }
@@ -428,15 +444,16 @@ class _LineupBoardState extends State<LineupBoard> {
                   ),
                 ),
                 const Spacer(),
-                if (_pending == 'formation:$teamNumber')
-                  const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else if (canChangeFormation)
+                if (canChangeFormation)
+                  // Lo spinner sta DENTRO il selettore invece di prenderne il
+                  // posto: da solo era alto 18 contro i 34 del selettore,
+                  // quindi ogni cambio di modulo faceva sobbalzare di 16px la
+                  // riga e con lei il campo sotto. Ora la casella resta dov'è e
+                  // cambia solo la freccia.
                   _FormationPicker(
                     value: formation,
                     options: formationsFor(widget.match.summary.footballFormat),
+                    busy: _pending == 'formation:$teamNumber',
                     onSelected: (value) => _changeFormation(teamNumber, value),
                   )
                 else
@@ -513,7 +530,12 @@ class _LineupBoardState extends State<LineupBoard> {
                 ],
               ),
               const SizedBox(height: 20),
-              if (isMine)
+              // `_canChoose` e non solo `isMine`: a partita conclusa il foglio
+              // offriva comunque "Libera la posizione", e il tocco finiva in
+              // una RPC che rifiuta con `match_locked`. È lo stesso principio
+              // per cui gli slot liberi si spengono — l'interfaccia non deve
+              // proporre ciò che il database ha già chiuso.
+              if (isMine && _canChoose)
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -526,10 +548,14 @@ class _LineupBoardState extends State<LineupBoard> {
                   ),
                 )
               else
-                const Text(
-                  'Questa posizione è occupata. Scegline una libera.',
+                Text(
+                  // A campo bloccato vale il motivo del blocco: "scegline una
+                  // libera" sarebbe un consiglio impossibile da seguire.
+                  _canChoose
+                      ? 'Questa posizione è occupata. Scegline una libera.'
+                      : _lockedReason,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppTheme.muted),
+                  style: const TextStyle(color: AppTheme.muted),
                 ),
             ],
           ),
@@ -541,7 +567,39 @@ class _LineupBoardState extends State<LineupBoard> {
 
 /// Azzurro del Team B, per distinguerlo dal verde Kickly del Team A.
 /// Corrisponde a `sky-400` usato dalla PWA.
+///
+/// Non è e non deve diventare un token di `AppTheme`: i token descrivono
+/// l'interfaccia (superfici, testi, l'unico accento del marchio), questo invece
+/// è l'identità di una delle due squadre e vive solo qui. Metterlo nel tema
+/// significherebbe offrire a tutta l'app un secondo accento da usare a piacere,
+/// ed è esattamente il modo in cui una palette a un solo accento si sfalda.
+///
+/// Perché proprio questa tinta e non un azzurro qualsiasi:
+///  - sta sopra il verde scuro del manto erboso, dove un blu saturo sprofonda e
+///    un pastello si spegne: `sky-400` è chiaro abbastanza da reggere il bordo
+///    di un token da 2px su quel fondo;
+///  - la coppia giallo-verde / ciano regge anche per deuteranopia e
+///    protanopia — le più diffuse — perché le due tinte si separano sul canale
+///    blu, che in entrambe resta intatto (una coppia verde/rosso no);
+///  - le due squadre restano diverse anche in luminanza, quindi si distinguono
+///    pure in scala di grigi o sotto il sole.
+/// In ogni caso il colore non è mai l'unico indizio: ogni squadra ha il suo
+/// campo, la lettera A/B nell'intestazione e l'etichetta "TEAM A · modulo"
+/// stampata sul campo.
 const Color _teamBColor = Color(0xFF38BDF8);
+
+/// I due verdi del manto erboso, dall'angolo in alto a sinistra a quello in
+/// basso a destra.
+///
+/// Erano scritti a mano dentro il gradiente: estratti qui perché un colore
+/// senza nome è un colore che nessuno sa se può toccare. Restano fuori da
+/// `AppTheme` di proposito — non sono superfici dell'interfaccia ma la
+/// texture dell'unica illustrazione dell'app, e la loro unica regola è essere
+/// abbastanza scuri da far risaltare token bianchi, verdi e azzurri.
+/// Il verde del marchio qui sopra ci va per i giocatori, non per il prato:
+/// se il campo fosse tinto di `AppTheme.primary` non risalterebbe più nulla.
+const Color _grassLight = Color(0xFF216536);
+const Color _grassDark = Color(0xFF174A2A);
 
 /// Pillola della fascia da capitano, gemella di `InfoPill` ma in oro.
 ///
@@ -632,31 +690,64 @@ class _CaptainBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = isCaptain || wantsCaptain;
+    // Rotellina tinta come il pulsante che la ospita: sull'oro pieno quella
+    // verde del tema sarebbe l'unico pezzo fuori tinta della barra.
+    Widget glyph(Color spinner, IconData icon) => pending == 'captain'
+        ? SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: spinner),
+          )
+        : Icon(icon, size: 18);
+
     return Wrap(
       spacing: 9,
       runSpacing: 9,
       children: [
         // Il capitano è l'unico ruolo non-admin che può cambiare modulo: senza
         // questo pulsante la tendina del modulo resta inattiva per quasi tutti.
-        active
-            ? FilledButton.icon(
-                onPressed: pending == null ? onToggleCaptain : null,
-                icon: pending == 'captain'
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.military_tech, size: 18),
-                label: Text(
-                  isCaptain ? 'Sei capitano' : 'Capitano al prossimo slot',
-                ),
-              )
-            : OutlinedButton.icon(
-                onPressed: pending == null ? onToggleCaptain : null,
-                icon: const Icon(Icons.military_tech_outlined, size: 18),
-                label: const Text('Candidati capitano'),
+        //
+        // Tre gradi d'oro, gli stessi del podio della classifica: pieno per il
+        // ruolo che hai davvero, appena accennato per la candidatura ancora da
+        // applicare, neutro quando non c'è niente in ballo. Prima lo stato
+        // attivo era un FilledButton verde, e il verde in questa schermata è
+        // già il Team A — sul campo, nel selettore squadra, nella legenda:
+        // lo stesso colore diceva due cose diverse a due dita di distanza.
+        // L'oro invece è già la fascia sul token e la pillola nella scheda
+        // giocatore, quindi il pulsante e la "C" sul campo si riconoscono
+        // finalmente come la stessa cosa.
+        if (isCaptain)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.gold,
+              // Testo scuro sull'oro: l'oro è chiaro, il bianco sopra non si
+              // leggerebbe. Stesso trattamento del primo posto in classifica.
+              foregroundColor: AppTheme.background,
+              disabledBackgroundColor: AppTheme.gold.withValues(alpha: .45),
+              disabledForegroundColor: AppTheme.background.withValues(
+                alpha: .7,
               ),
+            ),
+            onPressed: pending == null ? onToggleCaptain : null,
+            icon: glyph(AppTheme.background, Icons.military_tech),
+            label: const Text('Sei capitano'),
+          )
+        else if (wantsCaptain)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.gold,
+              backgroundColor: AppTheme.gold.withValues(alpha: .12),
+              side: BorderSide(color: AppTheme.gold.withValues(alpha: .5)),
+            ),
+            onPressed: pending == null ? onToggleCaptain : null,
+            icon: glyph(AppTheme.gold, Icons.military_tech),
+            label: const Text('Capitano al prossimo slot'),
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: pending == null ? onToggleCaptain : null,
+            icon: const Icon(Icons.military_tech_outlined, size: 18),
+            label: const Text('Candidati capitano'),
+          ),
         if (hasSlot)
           TextButton.icon(
             onPressed: pending == null ? onRelease : null,
@@ -749,37 +840,65 @@ class _FormationPicker extends StatelessWidget {
   const _FormationPicker({
     required this.value,
     required this.options,
+    required this.busy,
     required this.onSelected,
   });
 
   final String value;
   final List<String> options;
+  final bool busy;
   final ValueChanged<String> onSelected;
 
   @override
-  Widget build(BuildContext context) => PopupMenuButton<String>(
-    initialValue: value,
-    onSelected: onSelected,
-    itemBuilder: (_) => options
-        .map((option) => PopupMenuItem(value: option, child: Text(option)))
-        .toList(),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHigh,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: AppTheme.outline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-          ),
-          const SizedBox(width: 4),
-          const Icon(Icons.expand_more, size: 18),
-        ],
+  // Material esterno e non un Container decorato: `PopupMenuButton` avvolge da
+  // sé il proprio child in un InkWell, che dipinge l'onda nel Material più
+  // vicino sopra di lui — cioè quello della Card, che non sa niente di questi
+  // angoli. Risultato: l'onda usciva squadrata dai bordi arrotondati. Portando
+  // superficie, bordo e raggio su un Material con `clipBehavior`, l'InkWell
+  // trova sopra di sé una superficie della forma giusta e il tocco resta
+  // dentro la casella.
+  Widget build(BuildContext context) => Material(
+    color: AppTheme.surfaceHigh,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      side: const BorderSide(color: AppTheme.outline),
+    ),
+    child: PopupMenuButton<String>(
+      initialValue: value,
+      // Il tooltip predefinito di PopupMenuButton è un generico "Mostra menu":
+      // a un lettore di schermo la casella "4-3-3" resterebbe un testo che apre
+      // qualcosa di imprecisato. Qui è l'unico comando che cambia la forma
+      // della squadra, quindi va nominato.
+      tooltip: 'Cambia modulo',
+      // Durante la RPC il menu non si riapre: due moduli inviati di fila si
+      // sovrascriverebbero a vicenda, e `_run` scarterebbe comunque il secondo.
+      enabled: !busy,
+      onSelected: onSelected,
+      itemBuilder: (_) => options
+          .map((option) => PopupMenuItem(value: option, child: Text(option)))
+          .toList(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+            ),
+            const SizedBox(width: 4),
+            // Rotellina e freccia hanno lo stesso ingombro di 18: è ciò che
+            // impedisce alla casella di cambiare taglia a metà operazione.
+            if (busy)
+              const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              const Icon(Icons.expand_more, size: 18),
+          ],
+        ),
       ),
     ),
   );
@@ -913,13 +1032,11 @@ class _Pitch extends StatelessWidget {
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: const BoxDecoration(
-                      // I due verdi dell'erba non sono token e non devono
-                      // diventarlo: non sono colori dell'interfaccia ma la
-                      // superficie di gioco, l'unica illustrazione dell'app.
-                      // Il verde del marchio qui sopra ci va per i giocatori,
-                      // non per il prato.
+                      // Verdi del prato: costanti con un nome e la loro
+                      // motivazione in cima al file, non due esadecimali a
+                      // occhio in mezzo al layout.
                       gradient: LinearGradient(
-                        colors: [Color(0xFF216536), Color(0xFF174A2A)],
+                        colors: [_grassLight, _grassDark],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -1063,9 +1180,14 @@ class _SlotToken extends StatelessWidget {
 
     return Semantics(
       button: onTap != null,
+      // "(tu)" nell'etichetta: sullo schermo il proprio token si riconosce
+      // dall'alone e dalla targhetta piena nel colore della squadra, ma a un
+      // lettore di schermo quei due segnali non arrivano e il proprio nome
+      // scorreva in mezzo agli altri dieci senza distinguersi.
       label: free
           ? 'Posizione ${slot.role} libera${selectable ? '' : ', non disponibile'}'
-          : '${player!.displayName}, ${slot.role}${captain ? ', capitano' : ''}',
+          : '${player!.displayName}${mine ? ' (tu)' : ''}, ${slot.role}'
+                '${captain ? ', capitano' : ''}',
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,

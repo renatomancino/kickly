@@ -485,55 +485,58 @@ class _HeroMatch extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // Le due pillole in un Wrap, non ai due estremi di una Row:
+                // "Confermato" è una parola lunga e a 320px con il testo di
+                // sistema ingrandito si prendeva quasi tutta la riga,
+                // schiacciando la pillola del formato finché non sfondava
+                // (icona e spaziatura non si accorciano, solo l'etichetta).
+                // Nel Wrap la seconda pillola va a capo da sola e il titolo
+                // recupera tutta la larghezza della card.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Chip(
-                            backgroundColor: AppTheme.primary,
-                            side: BorderSide.none,
-                            labelStyle: const TextStyle(
-                              color: AppTheme.background,
-                              fontWeight: FontWeight.w900,
-                            ),
-                            label: Text(
-                              match.footballFormat.replaceAll('v', ' vs '),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            match.leagueName,
-                            style: const TextStyle(
-                              color: AppTheme.muted,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Text(
-                            match.title,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ],
-                      ),
+                    // Il formato è un attributo della partita, non uno stato:
+                    // diventa la pillola neutra condivisa. Da Chip verde
+                    // pieno era il pezzo più acceso della Home pur essendo il
+                    // dato meno importante dei tre, e rubava l'occhio al
+                    // titolo sotto di sé. L'icona è la stessa che la
+                    // MatchCard usa per il formato, così il dato si riconosce
+                    // al volo passando dalla lista alla Home.
+                    InfoPill(
+                      label: match.footballFormat.replaceAll('v', ' vs '),
+                      icon: Icons.sports_soccer,
                     ),
+                    // Qui invece l'accento ci sta, perché "Confermato" è uno
+                    // stato dell'utente e non un attributo. Ma tinto e non
+                    // verde pieno: il pieno in questa card spetta al pulsante
+                    // "Visualizza partita", l'unica cosa che porta altrove.
+                    // Due blocchi verdi pieni nella stessa card si annullano
+                    // a vicenda e non si capisce più dove toccare.
                     if (match.currentResponse == 'going')
-                      const Chip(
-                        backgroundColor: AppTheme.primary,
-                        side: BorderSide.none,
-                        avatar: Icon(
-                          Icons.check_circle,
-                          size: 16,
-                          color: AppTheme.background,
-                        ),
-                        labelStyle: TextStyle(
-                          color: AppTheme.background,
-                          fontWeight: FontWeight.w900,
-                        ),
-                        label: Text('Confermato'),
+                      const _StatusPill(
+                        icon: Icons.check_circle,
+                        label: 'Confermato',
                       ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                // Nome lega e titolo sono scritti dagli utenti: senza limite
+                // di righe un titolo lungo spingerebbe in basso orario, luogo
+                // e pulsante, cioè proprio le informazioni per cui la card
+                // esiste. Stessi limiti della MatchCard, così la partita si
+                // legge uguale in Home e in elenco.
+                Text(
+                  match.leagueName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppTheme.muted, fontSize: 12),
+                ),
+                Text(
+                  match.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -634,4 +637,43 @@ class _HeroMatch extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pillola di stato accentata della Home.
+///
+/// Non è `InfoPill`, che è deliberatamente neutra perché descrive attributi:
+/// questa dice che l'utente ha già risposto alla partita, cioè un'informazione
+/// che cambia nel tempo ed è personale. Ripete la stessa grammatica della
+/// pillola non piena della `MatchCard` (fondo verde al 12%, testo verde), che
+/// però è privata del suo file e non si può importare: replicarla qui è meno
+/// invasivo che promuoverla in `common.dart`, condiviso da tutte le schermate.
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: AppTheme.primary.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: AppTheme.primary),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppTheme.primary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
