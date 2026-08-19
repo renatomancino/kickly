@@ -90,10 +90,18 @@ class MatchCalendarService {
     // Uscire silenziosamente qui è il comportamento giusto, non un errore.
     if (eventId == null) return;
     final calendarId = await _writableCalendarId();
-    if (calendarId != null) {
-      await _plugin.deleteEvent(calendarId, eventId);
-    }
-    await prefs.remove(storedKey);
+    // La chiave si dimentica SOLO se l'evento è stato davvero cancellato.
+    // Se il permesso è stato revocato nel frattempo (calendarId null) o il
+    // plugin fallisce, l'evento resta nel calendario: perdere qui l'id
+    // renderebbe quell'evento orfano per sempre, senza più modo di
+    // ritrovarlo a un tentativo successivo.
+    if (calendarId == null) return;
+    final result = await _plugin.deleteEvent(calendarId, eventId);
+    // isSuccess da solo non basta: guarda solo che `data` non sia null,
+    // quindi un `data: false` legittimo (cancellazione rifiutata, non un
+    // errore) risulterebbe "successo". Stesso controllo doppio già usato
+    // sopra in _ensurePermission per lo stesso identico motivo.
+    if (result.isSuccess && result.data == true) await prefs.remove(storedKey);
   }
 
   Future<bool> _ensurePermission() async {

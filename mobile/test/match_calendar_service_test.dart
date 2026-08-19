@@ -16,6 +16,7 @@ class _FakeDeviceCalendarPlugin extends DeviceCalendarPlugin {
   _FakeDeviceCalendarPlugin() : super.private();
 
   bool permissionGranted = true;
+  bool deleteSucceeds = true;
   List<Calendar> calendars = [
     Calendar(id: 'cal-1', isReadOnly: false, isDefault: true),
   ];
@@ -49,7 +50,7 @@ class _FakeDeviceCalendarPlugin extends DeviceCalendarPlugin {
   Future<Result<bool>> deleteEvent(String? calendarId, String? eventId) async {
     deleteCalls++;
     lastDeletedEventId = eventId;
-    return Result<bool>()..data = true;
+    return Result<bool>()..data = deleteSucceeds;
   }
 }
 
@@ -137,6 +138,22 @@ void main() {
         expect(prefs.getString('calendar_event_m1'), isNull);
       },
     );
+
+    test('se la cancellazione dal calendario fallisce, l\'id resta salvato invece di perdere il riferimento all\'evento orfano', () async {
+      // Segnalato in revisione: rimuovere sempre la chiave anche quando
+      // deleteEvent fallisce renderebbe l'evento orfano nel calendario per
+      // sempre, senza più modo di ritrovarlo a un tentativo successivo.
+      final plugin = _FakeDeviceCalendarPlugin()..deleteSucceeds = false;
+      final service = MatchCalendarService(plugin: plugin);
+      final match = _match();
+
+      await service.syncForResponse(match, 'going');
+      await service.syncForResponse(match, 'not_going');
+
+      expect(plugin.deleteCalls, 1);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('calendar_event_m1'), 'evt-nuovo');
+    });
 
     test('disdire una partita mai accettata non tocca il calendario: non c\'era niente da togliere', () async {
       final plugin = _FakeDeviceCalendarPlugin();
