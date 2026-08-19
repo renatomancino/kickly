@@ -47,10 +47,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Inizializza CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           # `security-and-quality` invece del set predefinito: aggiunge alle query
@@ -65,6 +65,6 @@ jobs:
       # `npm ci && npm run build` qui allungherebbe il job di minuti senza cambiare
       # di una virgola il risultato dell'analisi.
       - name: Analizza
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:javascript-typescript'
