@@ -37,6 +37,32 @@ updates:
       - dependency-name: 'react-dom'
         update-types: [version-update:semver-major]
 
+      # I tre qui sotto non sono preferenze: sono vincoli verificati, ognuno
+      # con la PR che lo ha dimostrato. Senza queste righe Dependabot li
+      # ripropone ogni lunedì e ogni lunedì la CI li boccia.
+
+      # eslint 10 (PR #5, job PWA rosso): `eslint-config-next` si porta dietro
+      # `eslint-plugin-import`, che dichiara supporto a ESLint fino alla 9.
+      # Tornerà adottabile insieme a un major di eslint-config-next.
+      - dependency-name: 'eslint'
+        update-types: [version-update:semver-major]
+
+      # typescript 7 (PR #8, job PWA rosso): `typescript-eslint`, anch'esso
+      # tirato dentro da eslint-config-next, accetta TypeScript solo sotto la
+      # 6.1. E comunque un major del compilatore va fatto leggendo le note di
+      # rilascio, non in automatico.
+      - dependency-name: 'typescript'
+        update-types: [version-update:semver-major]
+
+      # @types/node deve seguire il major del Node che eseguiamo davvero
+      # (`engines: >=22.13.0`, CI su Node 22), non l'ultimo pubblicato. Tipi più
+      # avanti del runtime sono peggio che tipi vecchi: TypeScript accetta API
+      # che a runtime non esistono, quindi il typecheck passa e l'app crasha.
+      # Questo era già successo — vedi PR #7, mergiata e poi riportata a ^22.
+      # Va alzato a mano, insieme a `engines` e a NODE_VERSION nella CI.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+
   # --- App Flutter (mobile/pubspec.yaml) ---
   - package-ecosystem: pub
     directory: /mobile
