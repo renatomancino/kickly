@@ -111,6 +111,20 @@ void main() {
       expect(prefs.getString('calendar_event_m1'), 'evt-nuovo');
     });
 
+    test('l\'evento dichiara sempre una disponibilità, altrimenti su Android il suo aggiornamento verrebbe rifiutato', () async {
+      // Regressione trovata girando l'app sull'emulatore, non dai test: con
+      // availability a null il plugin scrive NULL in Events.availability, che
+      // nel CalendarProvider è NOT NULL. L'inserimento passa lo stesso, ma
+      // ogni aggiornamento successivo fallisce con SQLITE_CONSTRAINT_NOTNULL
+      // — e il servizio lo ingoia, quindi si vedeva solo in logcat.
+      final plugin = _FakeDeviceCalendarPlugin();
+      final service = MatchCalendarService(plugin: plugin);
+
+      await service.syncForResponse(_match(), 'going');
+
+      expect(plugin.lastEvent!.availability, Availability.Busy);
+    });
+
     test('senza il nome del campo, il luogo dell\'evento resta comunque leggibile con la sola città', () async {
       final plugin = _FakeDeviceCalendarPlugin();
       final service = MatchCalendarService(plugin: plugin);

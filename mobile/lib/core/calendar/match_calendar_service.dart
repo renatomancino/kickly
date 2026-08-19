@@ -140,7 +140,17 @@ class MatchCalendarService {
           )
           ..location = match.locationName.isEmpty
               ? match.city
-              : '${match.locationName}, ${match.city}';
+              : '${match.locationName}, ${match.city}'
+          // Obbligatorio su Android, non decorativo: lasciandolo null il
+          // plugin scrive NULL in Events.availability, che ha un vincolo NOT
+          // NULL nel CalendarProvider. L'inserimento sopravvive (il provider
+          // applica il suo default), l'AGGIORNAMENTO no: fallisce con
+          // SQLITE_CONSTRAINT_NOTNULL. Si vede solo riaggiungendo una partita
+          // già in calendario, ed è il motivo per cui va impostato qui —
+          // verificato su emulatore, il log lo mostrava mentre la UI no.
+          // "Busy" è anche la semantica giusta: a una partita confermata ci
+          // sei, e chi guarda la tua disponibilità deve vederti occupato.
+          ..availability = Availability.Busy;
 
     final result = await _plugin.createOrUpdateEvent(event);
     final newEventId = result?.data;
