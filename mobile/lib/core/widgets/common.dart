@@ -562,7 +562,14 @@ class _DateTile extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 8),
     decoration: BoxDecoration(
       color: AppTheme.primary.withValues(alpha: .1),
-      borderRadius: BorderRadius.circular(14),
+      // Token e non il 14 scritto a mano: questo riquadro vive dentro la Card
+      // di ogni partita, e `MatchCard` compare in Home, calendario e dettaglio
+      // lega — un raggio fuori scala qui non restava un dettaglio locale, si
+      // propagava a tre schermate. radiusMd (13) è il token dei blocchi
+      // piccoli, lo stesso di campi e pulsanti, e resta ben dentro il
+      // radiusLg (18) della Card che lo contiene: un blocco interno più
+      // arrotondato del suo contenitore fa sembrare i due angoli disallineati.
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
     ),
     child: Column(
       mainAxisSize: MainAxisSize.min,

@@ -735,7 +735,15 @@ class _SettingRow extends StatelessWidget {
                 color: (danger ? AppTheme.danger : AppTheme.primary).withValues(
                   alpha: .12,
                 ),
-                borderRadius: BorderRadius.circular(11),
+                // radiusMd regge anche su 36x36: a 13 restano ~10px di
+                // lato dritto per ogni bordo, quindi il riquadro legge ancora
+                // come un quadrato morbido e non scade in pillola (per quello
+                // servirebbe 18). Il quadratino icona da 34 della formazione
+                // usa già lo stesso token: con l'11 di prima due elementi
+                // uguali si arrotondavano in modo diverso, e la differenza è
+                // di quelle che non si notano da sole ma fanno sembrare
+                // l'insieme disegnato a pezzi.
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),
               child: Icon(
                 icon,
