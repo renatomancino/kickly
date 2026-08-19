@@ -1,0 +1,90 @@
+// Copia vendorizzata di device_calendar 3.9.0 (pub.dev). La versione
+// pubblicata è ferma al 2019 e non è più configurabile con AGP 9 / Gradle 9,
+// la toolchain usata dall'app e dalla CI: le modifiche qui sotto sono il
+// minimo per renderla di nuovo compilabile.
+//
+// Oltre a questo file sono stati toccati DeviceCalendarPlugin.kt e
+// CalendarDelegate.kt, per portare il plugin dalla "v1 embedding" (rimossa
+// dall'engine Flutter) a FlutterPlugin + ActivityAware. Il lato Dart e iOS è
+// invariato. Dettagli nel commento in mobile/pubspec.yaml.
+//
+// Perché la 3.x e non una major più recente: dalla 4.3.0 il pacchetto richiede
+// `timezone ^0.9.0`, mentre l'app ha già `timezone ^0.10.1` portata da
+// flutter_local_notifications, quindi le versioni successive non risolvono.
+
+group 'com.builttoroam.devicecalendar'
+version '1.0-SNAPSHOT'
+
+// Il blocco `buildscript` originale è stato rimosso: dichiarava
+// `com.android.tools.build:gradle:3.4.2` e il plugin Kotlin 1.3.41 su
+// `jcenter()`. jcenter è un repository Maven ritirato e Gradle 9 non espone
+// più quel metodo, quindi la valutazione di questo file falliva subito.
+// Quelle dipendenze sono comunque inutili: AGP e il plugin Kotlin arrivano già
+// dal build root dell'app (mobile/android/settings.gradle.kts).
+
+// I repository per le dipendenze del plugin. L'originale usava `jcenter()`,
+// sostituito con `mavenCentral()`, che ospita gli stessi artefatti.
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    // Richiesto da AGP 8+: prima veniva dedotto dall'attributo `package` del
+    // manifest, che ora è vietato (rimosso da src/main/AndroidManifest.xml).
+    // Il valore è lo stesso di prima, così il package generato per BuildConfig
+    // e per le risorse resta invariato e il codice Kotlin non va toccato.
+    namespace 'com.builttoroam.devicecalendar'
+
+    // Era `compileSdkVersion 29`. Allineato al compileSdk dell'app
+    // (flutter.compileSdkVersion = 36): AGP 9 non accetta un livello così
+    // vecchio, e le dipendenze AndroidX moderne richiedono comunque la 36.
+    compileSdk 36
+
+    // L'originale non dichiarava nulla: Java ricadeva sul default di AGP (11)
+    // e Kotlin sul JDK che esegue Gradle (25), e il build falliva con
+    // "Inconsistent JVM-target compatibility". Allineati entrambi alla 17,
+    // la stessa usata dal modulo app (android/app/build.gradle.kts).
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+    defaultConfig {
+        // Era `minSdkVersion 16`, sotto il minimo supportato da AGP 9.
+        // Allineato al minSdk dell'app (flutter.minSdkVersion = 24).
+        minSdk 24
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    // Era `lintOptions`, rimosso in AGP 8+ e sostituito da `lint`.
+    lint {
+        disable 'InvalidPackage'
+    }
+}
+
+// Lato Kotlin va impostato lo stesso target dichiarato in `compileOptions`:
+// senza, il compilatore Kotlin userebbe la JVM del daemon Gradle.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    // La dipendenza esplicita su `kotlin-stdlib-jdk7:1.3.41` è stata rimossa:
+    // la stdlib è aggiunta automaticamente dal plugin Kotlin nella versione
+    // usata dal progetto (2.4.0), e inchiodarla alla 1.3.41 creerebbe un
+    // conflitto di versione con il resto del build.
+    implementation 'com.google.code.gson:gson:2.8.5'
+    api 'androidx.appcompat:appcompat:1.0.2'
+    implementation 'org.dmfs:lib-recur:0.11.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.3.5'
+}

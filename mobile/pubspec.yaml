@@ -55,6 +55,35 @@ dependencies:
   sign_in_with_apple: 8.1.0
   # Hash del nonce nel flusso Apple (vedi kickly_repository.dart).
   crypto: 3.0.7
+  # Lettura/scrittura degli eventi sul calendario di sistema (iOS e Android).
+  # Resta pinnata alla 3.x: dalla 4.3.0 il pacchetto richiede `timezone ^0.9.0`,
+  # mentre qui flutter_local_notifications porta già `timezone ^0.10.1`, quindi
+  # le versioni successive non risolvono.
+  device_calendar: ^3.9.0
+
+# Copia vendorizzata di device_calendar 3.9.0: il lato Android del pacchetto
+# pubblicato NON è utilizzabile con Flutter/AGP attuali, per due motivi
+# distinti (entrambi risolti nella copia, il lato Dart e iOS è invariato):
+#
+# 1. Build. Il suo `android/build.gradle` dichiara `jcenter()`, un repository
+#    Maven ritirato da anni che Gradle 9 non espone più: la build falliva in
+#    configurazione, prima ancora di compilare (è l'errore su cui si fermava
+#    il job CI "Android (APK debug)"). Aggiornati anche namespace, compileSdk,
+#    minSdk e JVM target, tutti fermi al 2019 e rifiutati da AGP 9.
+#
+# 2. Runtime. Il plugin si registrava solo con la "v1 embedding"
+#    (`registerWith(Registrar)`), rimossa dall'engine Flutter: oltre a non
+#    compilare più, non veniva nemmeno inserito in GeneratedPluginRegistrant,
+#    quindi su Android ogni chiamata sarebbe fallita con MissingPluginException
+#    anche a build riuscita. È stato portato a FlutterPlugin + ActivityAware.
+#
+# Perché non aggiornare invece la dipendenza: dalla 4.3.0 il pacchetto richiede
+# `timezone ^0.9.0`, mentre l'app ha già `timezone ^0.10.1` portata da
+# flutter_local_notifications, quindi le major successive non risolvono.
+# Da rimuovere se/quando quel vincolo si sbloccherà.
+dependency_overrides:
+  device_calendar:
+    path: third_party/device_calendar-3.9.0
 
 dev_dependencies:
   flutter_test:

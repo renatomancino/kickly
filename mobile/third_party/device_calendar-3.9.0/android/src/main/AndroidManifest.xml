@@ -1,0 +1,5 @@
+<!-- L'attributo `package="com.builttoroam.devicecalendar"` è stato rimosso:
+     da AGP 8 non è più ammesso nel manifest di una libreria ed è sostituito
+     dal `namespace` dichiarato in android/build.gradle (stesso valore). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+</manifest>

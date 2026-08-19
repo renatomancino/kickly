@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app.dart';
+import '../../core/calendar/match_calendar_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
@@ -22,6 +25,7 @@ class MatchDetailPage extends StatefulWidget {
 class _MatchDetailPageState extends State<MatchDetailPage> {
   Future<MatchDetail?>? _future;
   bool _responding = false;
+  final _calendarService = MatchCalendarService();
 
   @override
   void didChangeDependencies() {
@@ -44,11 +48,17 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
     await next;
   }
 
-  Future<void> _respond(String response) async {
+  Future<void> _respond(String response, MatchSummary summary) async {
     setState(() => _responding = true);
     try {
       await AppScope.of(context).repository
           .setMatchResponse(widget.matchId, response);
+      // Dopo che la RSVP è confermata sul server, mai prima: se la
+      // sincronizzazione col calendario fosse davanti alla chiamata reale e
+      // quella fallisse, l'evento resterebbe nel calendario di una partita
+      // a cui l'utente non risulta iscritto. Il metodo non solleva mai
+      // (vedi MatchCalendarService), quindi non serve un try separato qui.
+      unawaited(_calendarService.syncForResponse(summary, response));
       await _reload();
       if (mounted) {
         ScaffoldMessenger.of(
@@ -102,7 +112,11 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
             return _MatchContent(
               match: match,
               responding: _responding,
-              onRespond: _respond,
+              // `match.summary` è disponibile solo qui, dove il
+              // FutureBuilder ha già risolto i dati: _respond stesso resta
+              // a un solo argomento, senza dover far attraversare la
+              // partita ai widget intermedi che non la usano.
+              onRespond: (response) => _respond(response, match.summary),
               onReload: _reload,
             );
           },

@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- READ_CALENDAR serve perché MatchCalendarService legge i calendari
+         del dispositivo (retrieveCalendars) per scegliere quello scrivibile
+         su cui creare l'evento, non solo per scrivere. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- allowBackup=false: senza, Android includerebbe l'app nel backup
          automatico su Google Drive e nel trasferimento dati fra dispositivi.
          La sessione ora vive in Keystore (vedi SecureSessionStorage) e non
