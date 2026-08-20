@@ -851,6 +851,15 @@ String friendlyError(Object error) {
   if (text.contains('membership_banned')) {
     return 'Non puoi rientrare in questa lega: un admin ti ha rimosso.';
   }
+  if (text.contains('invite_attempts_rate_limited')) {
+    // join_league_by_code conta i tentativi (giusti o sbagliati) per
+    // frenare chi prova a indovinare il codice a forza bruta: un
+    // "riprova tra poco" qui direbbe la verità solo per caso, "aspetta
+    // qualche minuto" è il messaggio corretto anche per chi ha solo
+    // sbagliato a ricopiare il codice troppe volte di fila.
+    return 'Troppi tentativi con questo codice: aspetta qualche minuto '
+        'prima di riprovare.';
+  }
   if (text.contains('public_league_not_found')) {
     return 'Questa lega non esiste più o non è più pubblica.';
   }

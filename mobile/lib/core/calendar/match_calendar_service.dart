@@ -4,6 +4,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/models.dart';
 
+/// Esito di un tentativo di scrittura sul calendario.
+///
+/// Esiste per il percorso MANUALE, non per quello automatico: quando è
+/// l'utente a chiedere esplicitamente "aggiungi al calendario" ha diritto di
+/// sapere com'è andata, e i tre modi in cui può non andare (permesso negato,
+/// nessun calendario scrivibile, plugin che fallisce) richiedono tre risposte
+/// diverse — solo la prima si risolve dalle impostazioni del telefono, e non
+/// avrebbe senso suggerirla per le altre due.
+enum CalendarSyncOutcome {
+  /// Evento creato o aggiornato: l'id è stato salvato.
+  added,
+
+  /// Il sistema operativo non ha concesso l'accesso al calendario.
+  permissionDenied,
+
+  /// Il dispositivo non espone nessun calendario su cui si possa scrivere
+  /// (tipico degli emulatori appena creati, ma anche di un telefono con i
+  /// soli calendari in sola lettura di un abbonamento).
+  noWritableCalendar,
+
+  /// Il plugin ha risposto con un errore, o non ha restituito l'id
+  /// dell'evento appena scritto.
+  pluginError,
+}
+
 /// Sincronizza la presenza a una partita col calendario di sistema
 /// (iCloud/Apple Calendar su iOS, quello collegato — spesso Google — su
 /// Android): "vado" crea o aggiorna l'evento, ogni altra risposta lo toglie.
@@ -35,6 +60,9 @@ class MatchCalendarService {
   Future<void> syncForResponse(MatchSummary match, String response) async {
     try {
       if (response == 'going') {
+        // L'esito si scarta di proposito: qui nessun fallimento deve
+        // arrivare all'utente (vedi doc della classe). A leggerlo è solo
+        // addManually, dove è l'utente stesso ad aver chiesto l'aggiunta.
         await _addOrUpdate(match);
       } else {
         await _remove(match.id);
@@ -47,10 +75,58 @@ class MatchCalendarService {
     }
   }
 
-  Future<void> _addOrUpdate(MatchSummary match) async {
-    if (!await _ensurePermission()) return;
-    final calendarId = await _writableCalendarId();
-    if (calendarId == null) return;
+  /// Aggiunge la partita al calendario su richiesta esplicita dell'utente,
+  /// restituendo l'esito invece di ingoiarlo.
+  ///
+  /// È il gemello "parlante" di [syncForResponse], e serve a due casi che il
+  /// percorso automatico non copre per costruzione:
+  /// 1. chi aveva già confermato la presenza PRIMA che la sincronizzazione
+  ///    automatica esistesse non la vedrà mai scattare, perché si aggancia
+  ///    all'atto di rispondere: senza un'azione manuale non avrebbe nessun
+  ///    modo di recuperare la partita nel proprio calendario;
+  /// 2. quando l'automatismo fallisce resta muto di proposito (non deve
+  ///    disturbare una RSVP andata a buon fine), quindi oggi un permesso
+  ///    negato è indistinguibile da un successo.
+  ///
+  /// Non solleva mai: il chiamante nella UI deve poter mappare l'esito su un
+  /// messaggio senza avvolgere la chiamata in un altro try.
+  Future<CalendarSyncOutcome> addManually(MatchSummary match) async {
+    try {
+      return await _addOrUpdate(match);
+    } catch (error, stack) {
+      debugPrint('Aggiunta manuale al calendario non riuscita: $error\n$stack');
+      return CalendarSyncOutcome.pluginError;
+    }
+  }
+
+  /// Dice se questa partita risulta già scritta sul calendario.
+  ///
+  /// Si basa sull'id salvato al momento della scrittura, non su una lettura
+  /// del calendario: interrogare il calendario richiederebbe il permesso, e
+  /// chiederlo solo per disegnare un'etichetta significherebbe mostrare il
+  /// dialogo di sistema all'apertura della pagina, prima ancora che l'utente
+  /// abbia chiesto qualcosa.
+  Future<bool> isSynced(String matchId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('$_prefsKeyPrefix$matchId') != null;
+  }
+
+  /// Corpo condiviso dai due percorsi: torna sempre un esito, che
+  /// [syncForResponse] scarta (resta silenzioso come prima) e [addManually]
+  /// invece mostra. Tenerlo unico evita che il percorso manuale e quello
+  /// automatico divergano alla prima modifica alla logica di scrittura.
+  Future<CalendarSyncOutcome> _addOrUpdate(MatchSummary match) async {
+    if (!await _ensurePermission()) return CalendarSyncOutcome.permissionDenied;
+    final lookup = await _writableCalendarLookup();
+    // Due cause diverse dietro allo stesso "niente su cui scrivere": la
+    // query ai calendari può fallire (plugin/canale nativo in errore), o può
+    // riuscire e restituire zero calendari scrivibili. Solo la seconda è
+    // "nessun calendario disponibile" in senso proprio — la prima è un
+    // guasto del plugin, e dirla all'utente come se il dispositivo non
+    // avesse calendari sarebbe fuorviante (e gli negherebbe il "riprova").
+    if (lookup.queryFailed) return CalendarSyncOutcome.pluginError;
+    final calendarId = lookup.calendarId;
+    if (calendarId == null) return CalendarSyncOutcome.noWritableCalendar;
 
     final prefs = await SharedPreferences.getInstance();
     final storedKey = '$_prefsKeyPrefix${match.id}';
@@ -72,13 +148,28 @@ class MatchCalendarService {
           )
           ..location = match.locationName.isEmpty
               ? match.city
-              : '${match.locationName}, ${match.city}';
+              : '${match.locationName}, ${match.city}'
+          // Obbligatorio su Android, non decorativo: lasciandolo null il
+          // plugin scrive NULL in Events.availability, che ha un vincolo NOT
+          // NULL nel CalendarProvider. L'inserimento sopravvive (il provider
+          // applica il suo default), l'AGGIORNAMENTO no: fallisce con
+          // SQLITE_CONSTRAINT_NOTNULL. Si vede solo riaggiungendo una partita
+          // già in calendario, ed è il motivo per cui va impostato qui —
+          // verificato su emulatore, il log lo mostrava mentre la UI no.
+          // "Busy" è anche la semantica giusta: a una partita confermata ci
+          // sei, e chi guarda la tua disponibilità deve vederti occupato.
+          ..availability = Availability.Busy;
 
     final result = await _plugin.createOrUpdateEvent(event);
     final newEventId = result?.data;
     if (result?.isSuccess == true && newEventId != null) {
       await prefs.setString(storedKey, newEventId);
+      return CalendarSyncOutcome.added;
     }
+    // Senza id non c'è niente da salvare, e soprattutto non c'è prova che
+    // l'evento sia stato scritto: dichiararlo aggiunto qui farebbe apparire
+    // all'utente un "fatto" per un evento che nel calendario non c'è.
+    return CalendarSyncOutcome.pluginError;
   }
 
   Future<void> _remove(String matchId) async {
@@ -115,12 +206,26 @@ class MatchCalendarService {
     return requested.isSuccess && requested.data == true;
   }
 
-  Future<String?> _writableCalendarId() async {
+  /// Usato da [_remove]: lì un fallimento della query e una lista vuota
+  /// portano comunque allo stesso comportamento (l'evento resta salvato per
+  /// un tentativo successivo), quindi non serve distinguerli — a differenza
+  /// di [_addOrUpdate], che li mappa su due [CalendarSyncOutcome] diversi.
+  Future<String?> _writableCalendarId() async =>
+      (await _writableCalendarLookup()).calendarId;
+
+  /// `queryFailed` distingue "il plugin non è riuscito a leggere i
+  /// calendari" (un guasto, vero errore) da "li ha letti e non ce n'è
+  /// nessuno scrivibile" (fatto, non un errore) — [calendarId] da solo non
+  /// basterebbe a chi vuole scegliere il messaggio giusto per l'utente.
+  Future<({String? calendarId, bool queryFailed})>
+  _writableCalendarLookup() async {
     final result = await _plugin.retrieveCalendars();
-    if (!result.isSuccess || result.data == null) return null;
+    if (!result.isSuccess || result.data == null) {
+      return (calendarId: null, queryFailed: true);
+    }
     final calendars = result.data!.where((c) => c.isReadOnly != true).toList();
-    if (calendars.isEmpty) return null;
+    if (calendars.isEmpty) return (calendarId: null, queryFailed: false);
     final preferred = calendars.where((c) => c.isDefault == true).firstOrNull;
-    return (preferred ?? calendars.first).id;
+    return (calendarId: (preferred ?? calendars.first).id, queryFailed: false);
   }
 }

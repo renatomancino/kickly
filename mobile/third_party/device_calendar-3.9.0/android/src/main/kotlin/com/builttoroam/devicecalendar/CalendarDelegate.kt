@@ -890,7 +890,15 @@ class CalendarDelegate : PluginRegistry.RequestPermissionsResultListener {
     @Synchronized
     private fun generateUniqueRequestCodeAndCacheParameters(parameters: CalendarMethodsParametersCacheModel): Int {
         // TODO we can ran out of Int's at some point so this probably should re-use some of the freed ones
-        val uniqueRequestCode: Int = (_cachedParametersMap.keys.max() ?: 0) + 1
+        // BUG DEL PACCHETTO ORIGINALE (verificato dal vero su emulatore Android):
+        // .max() nel Kotlin stdlib corrente lancia NoSuchElementException su
+        // collezione vuota invece di restituire null, quindi il `?: 0` che
+        // segue non veniva mai raggiunto. Al primissimo utilizzo (cache
+        // ancora vuota, cioè la primissima richiesta di permesso calendario
+        // mai fatta dall'app) ogni chiamata falliva subito con
+        // PlatformException, prima ancora che il dialogo di sistema potesse
+        // comparire. maxOrNull() restituisce davvero null se vuota.
+        val uniqueRequestCode: Int = (_cachedParametersMap.keys.maxOrNull() ?: 0) + 1
         parameters.ownCacheKey = uniqueRequestCode
         _cachedParametersMap[uniqueRequestCode] = parameters
 
