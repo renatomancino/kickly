@@ -113,9 +113,23 @@ scopo e' validare le migrazioni *nuove* introdotte dalla PR stessa, non
 quelle gia' in main. Estende concettualmente `migrations-check` (che oggi
 verifica solo che le migrazioni esistenti non siano state toccate, non che
 quelle nuove siano valide). Usa la CLI Supabase (gratuita) per avviare uno
-stack locale via Docker e applicare tutte le migrazioni in sequenza: un
-errore SQL o un ordine di dipendenza sbagliato fa fallire il job invece di
-scoprirsi al primo deploy reale.
+stack locale via Docker: `supabase start` applica gia' da solo tutte le
+migrazioni su un volume nuovo, quindi non serve un `supabase db reset`
+separato che rifarebbe lo stesso lavoro. Un errore SQL o un ordine di
+dipendenza sbagliato fa fallire il job invece di scoprirsi al primo deploy
+reale.
+
+**Corretto in fase di implementazione (verificato su un volume Docker
+pulito, 2026-08-20):** `supabase/seed.sql` ha un bug pre-esistente e non
+correlato alle migrazioni (i 12 UUID demo condividono gli stessi primi 12
+caratteri esadecimali, quindi il trigger che genera lo username di default
+li fa collidere tutti sullo stesso valore, violando il vincolo unique).
+Dato che `supabase start` semina automaticamente su un volume nuovo, senza
+intervento il job fallirebbe su ogni singola PR. Il job disabilita quindi
+`[db.seed]` in `supabase/config.toml` subito dopo il checkout (mai
+committato, solo nella copia effimera del runner): questo job deve
+validare le migrazioni, non i dati demo, e la correzione del bug del seed
+stesso resta fuori scope qui.
 
 ### A6. Coverage tracking
 
@@ -165,8 +179,9 @@ workflow_run "CI" completato con failure, ref = main
      (ultime N righe dello step fallito, solo come contesto per chi legge),
      classificazione ed etichetta (`ci-failure` + `agent-triage` o
      `needs-human` a seconda dell'esito)
-  4a. Se TRIVIAL -> assegna l'issue al Copilot coding agent
-      (`copilot-swe-agent[bot]`, via PAT — vedi sotto)
+  4a. Se TRIVIAL -> assegna l'issue al Copilot coding agent (`@copilot` via
+      `gh`, autenticato col PAT — vedi sotto; step separato dalla creazione,
+      cosi' un PAT mancante non fa perdere la issue)
   4b. Se NEEDS_HUMAN -> assegna l'issue a @mariocelzo e @renatomancino
      |
      v
@@ -218,10 +233,16 @@ Verificato via ricerca (non e' piu' un'incognita):
   salvato come secret del repository (es. `COPILOT_ASSIGN_PAT`). Le
   assegnazioni automatiche consumano la quota Copilot dell'account di Renato,
   non quella di Mario.
-- Login esatto da usare come assignee: `copilot-swe-agent[bot]` (altre varianti
-  del nome causano un errore 422).
-- Via `gh` CLI: `gh issue edit <numero> --add-assignee copilot-swe-agent`
-  (autenticato con il PAT, non con il token di default di Actions).
+- Login da usare come assignee: `gh` CLI supporta nativamente il valore
+  speciale `@copilot` sia in `gh issue create --assignee` sia in
+  `gh issue edit --add-assignee` (risolve da solo il bot giusto, non serve
+  conoscere il login raw `copilot-swe-agent[bot]`) — questa e' la forma
+  usata dall'implementazione finale.
+- La issue viene sempre creata con il token di default (mai perduta se
+  l'assegnazione fallisce), poi assegnata in uno step separato autenticato
+  con il PAT: `gh issue edit <numero> --add-assignee "@copilot"`. Se il PAT
+  manca o e' scaduto, solo questo secondo step fallisce — la issue resta
+  comunque aperta e visibile.
 
 ### Perche' solo push su `main`
 
@@ -269,9 +290,9 @@ chiariti prima di scrivere il piano di implementazione:
    il passo di classificazione con l'euristica statica descritta sopra,
    invece che con una prova pratica di un'API che non esiste piu'.
 2. **Assegnazione Copilot via API** — confermato che serve un PAT
-   fine-grained (non il `GITHUB_TOKEN` di default), login esatto
-   `copilot-swe-agent[bot]`, legato all'account di Renato. Vedi la sezione
-   dedicata sopra per i dettagli.
+   fine-grained (non il `GITHUB_TOKEN` di default), legato all'account di
+   Renato, usando il valore speciale `@copilot` supportato nativamente da
+   `gh`. Vedi la sezione dedicata sopra per i dettagli.
 
 Resta un punto minore, non bloccante, riguardo ad A4: se il build iOS senza
 firma non bastasse a causa di capability che richiedono un profilo di
