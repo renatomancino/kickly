@@ -62,10 +62,16 @@ degli account studenti finche' dura.
 Nuovo job in `ci.yml` (o workflow separato), trigger `pull_request`, usa
 `actions/dependency-review-action`. Analizza il *diff* di dipendenze
 introdotto dalla PR (npm, e se supportato anche pub) e fallisce se introduce
-pacchetti con CVE note di severita' alta o licenze incompatibili. Complementa
-`npm audit`, che oggi controlla l'intero lockfile ma solo su push/PR gia'
-aperte, non il diff incrementale. Nessun permesso in scrittura necessario,
-funziona anche su PR da fork perche' legge solo i manifest, non esegue nulla.
+pacchetti con CVE note di severita' alta. Complementa `npm audit`, che oggi
+controlla l'intero lockfile ma solo su push/PR gia' aperte, non il diff
+incrementale. Nessun permesso in scrittura necessario, funziona anche su PR
+da fork perche' legge solo i manifest, non esegue nulla.
+
+**Corretto in fase di implementazione (code review, 2026-08-20):** niente
+controllo licenze incompatibili nella v1. L'action lo supporterebbe
+(`allow-licenses`/`deny-licenses`), ma richiede una policy di licenze che il
+team non ha ancora deciso — inventarne una in un job CI non e' una decisione
+implementativa. Da aggiungere quando quella policy esiste.
 
 ### A2. CODEOWNERS
 
