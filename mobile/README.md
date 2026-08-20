@@ -195,6 +195,17 @@ livelli sopra.
 - **Build di release offuscate.** `--obfuscate --split-debug-info` (vedi sopra)
   su Android e iOS: senza, chiunque può decompilare l'APK/IPA e leggere nomi
   di classi/metodi/stringhe quasi come nel sorgente originale.
+- **Privacy manifest iOS.** `ios/Runner/PrivacyInfo.xcprivacy` dichiara le
+  "Required Reason API" usate dall'app: senza, Apple rifiuta la submission in
+  review. Il motore Flutter e i plugin distribuiti come pod portano già il
+  proprio manifest; l'unica categoria che resta scoperta è
+  `NSPrivacyAccessedAPICategoryFileTimestamp` (motivo `C617.1`), usata dalla
+  cache su disco di `cached_network_image` → `flutter_cache_manager` →
+  `path_provider_foundation`, che chiama Foundation via `dart:ffi` e quindi non
+  ha un pod (né un manifest) che la copra. Il file è agganciato alla build phase
+  "Copy Bundle Resources" del target Runner: se sparisce da lì, viene compilato
+  ma non finisce nell'IPA. I tipi di dato raccolti si dichiarano invece nella
+  scheda App Privacy di App Store Connect, non in questo file.
 
 Cosa manca volutamente, e perché: niente certificate pinning (aggiunge
 fragilità ad ogni rotazione del certificato TLS, senza un threat model
