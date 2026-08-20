@@ -576,36 +576,37 @@ class _GoogleButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    // Stessa logica dell'altezza di _AppleButton qui sotto: imposta da fuori
-    // così il bottone resta allineato agli altri pulsanti della colonna anche
-    // se in futuro cambia lo stile interno.
-    height: _primaryButtonHeight,
-    child: ElevatedButton.icon(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: _googleButtonTextColor,
-        disabledBackgroundColor: Colors.white.withValues(alpha: .6),
-        disabledForegroundColor: _googleButtonTextColor.withValues(alpha: .4),
-        // Ombra leggerissima invece dell'elevazione Material di default
-        // (troppo pesante per un pulsante che deve restare secondario
-        // rispetto al CTA verde più sotto nella pagina).
-        elevation: 1,
-        shadowColor: Colors.black.withValues(alpha: .25),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          // Bordo quasi impercettibile: sul bottone Apple bianco non serve
-          // (il bianco pieno si stacca già dallo sfondo scuro), ma qui aiuta
-          // a definire il bordo della pillola contro un fondo altrettanto
-          // chiaro se mai la pagina venisse letta in un tema chiaro futuro.
-          side: BorderSide(color: Colors.black.withValues(alpha: .1)),
-        ),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+  Widget build(BuildContext context) => ElevatedButton.icon(
+    onPressed: onPressed,
+    style: ElevatedButton.styleFrom(
+      // `Size.fromHeight` e non `Size(qualcosa, h)`: la larghezza è
+      // `double.infinity`, cioè "riempi tutta la colonna disponibile" — lo
+      // stesso trucco del vecchio OutlinedButton, perso nel passaggio a
+      // ElevatedButton (un ElevatedButton senza minimumSize si stringe al
+      // contenuto, mentre _AppleButton qui sotto si allarga da solo: senza
+      // questo i due pulsanti avevano davvero larghezza diversa).
+      minimumSize: const Size.fromHeight(_primaryButtonHeight),
+      backgroundColor: Colors.white,
+      foregroundColor: _googleButtonTextColor,
+      disabledBackgroundColor: Colors.white.withValues(alpha: .6),
+      disabledForegroundColor: _googleButtonTextColor.withValues(alpha: .4),
+      // Ombra leggerissima invece dell'elevazione Material di default
+      // (troppo pesante per un pulsante che deve restare secondario
+      // rispetto al CTA verde più sotto nella pagina).
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: .25),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        // Bordo quasi impercettibile: sul bottone Apple bianco non serve
+        // (il bianco pieno si stacca già dallo sfondo scuro), ma qui aiuta
+        // a definire il bordo della pillola contro un fondo altrettanto
+        // chiaro se mai la pagina venisse letta in un tema chiaro futuro.
+        side: BorderSide(color: Colors.black.withValues(alpha: .1)),
       ),
-      icon: const _GoogleMark(),
-      label: const Text('Continua con Google'),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
     ),
+    icon: const _GoogleMark(),
+    label: const Text('Continua con Google'),
   );
 }
 
