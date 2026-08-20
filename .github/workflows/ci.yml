@@ -471,3 +471,35 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: errori SQL o problemi di ordine/dipendenza nelle migrazioni
+  # NUOVE introdotte da questa PR. `migrations-check` (sopra) verifica solo
+  # che le migrazioni GIA' esistenti non vengano toccate — non dice nulla
+  # sulla validita' di quelle nuove. Qui si applica l'intera sequenza di
+  # migrazioni su un Postgres locale vero (via Docker, gratuito sui runner
+  # pubblici): un errore di sintassi o un vincolo violato fa fallire il job
+  # invece di scoprirsi al primo deploy sul progetto Supabase reale.
+  # Gira solo sulle PR: l'obiettivo e' validare cio' che la PR aggiunge, non
+  # ri-validare ogni volta lo storico gia' verificato in main.
+  # ---------------------------------------------------------------------------
+  supabase-migrations-apply:
+    name: Migrazioni Supabase (apply pulito)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Avvia lo stack locale e applica tutte le migrazioni
+        run: |
+          supabase start
+          supabase db reset
+
+      - name: Ferma lo stack
+        if: always()
+        run: supabase stop
