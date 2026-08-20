@@ -102,7 +102,21 @@ jobs:
 
       - name: Test
         working-directory: mobile
-        run: flutter test
+        run: flutter test --coverage
+
+      # Solo un riepilogo nella UI di Actions, non un gate: l'obiettivo e'
+      # rendere visibile il trend nel tempo, non bloccare la PR su una soglia
+      # arbitraria di copertura. `awk` invece di `lcov` perche' quest'ultimo
+      # non e' preinstallato sui runner ubuntu-latest e non vale la pena
+      # installarlo per un conteggio a una riga.
+      - name: Riepilogo copertura
+        working-directory: mobile
+        run: |
+          echo "### Copertura test Flutter" >> "$GITHUB_STEP_SUMMARY"
+          awk -F',' '/^DA:/{total++; if ($2>0) covered++} END{
+            if (total==0) print "Nessuna riga misurata in lcov.info.";
+            else printf "Righe coperte: %d/%d (%.1f%%)\n", covered, total, (covered/total)*100
+          }' coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
 
       # Solo `lib` e `test`: le altre directory del progetto Flutter (android, ios, web,
       # build) contengono codice generato dai template o dai tool, che non ha senso
@@ -178,8 +192,7 @@ jobs:
   # Build di debug e non release: salta R8/minificazione (che qui non aggiungerebbero
   # segnale) ma attraversa comunque tutta la configurazione Gradle, la compilazione dei
   # plugin e il manifest merge, cioe' esattamente dove si rompeva.
-  # Nessuna build iOS: i runner macOS sono 10x piu' lenti e costosi, e il valore aggiunto
-  # su un progetto senza codice nativo iOS custom non lo giustifica.
+  # Build iOS: vedi il job ios-build subito sotto (solo su push a main).
   # ---------------------------------------------------------------------------
   android-build:
     name: Android (APK debug)
@@ -277,6 +290,61 @@ jobs:
       - name: Build APK di debug
         working-directory: mobile
         run: flutter build apk --debug --dart-define-from-file=config.local.json
+
+  # ---------------------------------------------------------------------------
+  # Build iOS di debug, senza firma. Stesso spirito del job Android sopra:
+  # una build vera intercetta rotture che `flutter analyze`/`flutter test`
+  # non vedono (Swift Package Manager, CocoaPods, configurazione Xcode).
+  # Verificato in locale (Flutter 3.47.0 + Xcode 26.6) che
+  # `--no-codesign` completa con successo anche con l'entitlement Sign In
+  # with Apple presente in Runner.entitlements: la validazione delle
+  # capability avviene in fase di firma, che qui e' disattivata.
+  # Trigger SOLO push su main, non sulle PR: e' un job nuovo, non ancora
+  # rodato in produzione. Si allarga alle PR in futuro se si dimostra
+  # stabile e sufficientemente veloce da non allungare il feedback loop.
+  # I runner macOS sono gratuiti quanto quelli Linux sui repository
+  # pubblici (il moltiplicatore di costo Actions vale solo sui privati).
+  # ---------------------------------------------------------------------------
+  ios-build:
+    name: iOS (debug, no-codesign)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Mostra la versione di Xcode del runner
+        run: xcodebuild -version
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Stessa configurazione fittizia usata nel job android-build: al
+      # compilatore serve solo che i valori esistano e siano stringhe, non
+      # che puntino a un backend raggiungibile (vedi commento esteso nel
+      # job android-build per il ragionamento completo).
+      - name: Genera una configurazione fittizia per la compilazione
+        working-directory: mobile
+        run: |
+          cat > config.local.json <<'JSON'
+          {
+            "SUPABASE_URL": "https://ci-placeholder-not-a-real-project.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_ci_placeholder_value_not_a_real_key",
+            "GOOGLE_SERVER_CLIENT_ID": "000000000000-ciplaceholderserver.apps.googleusercontent.com",
+            "GOOGLE_IOS_CLIENT_ID": "000000000000-ciplaceholderios.apps.googleusercontent.com"
+          }
+          JSON
+
+      - name: Risolvi le dipendenze
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Build iOS di debug (senza firma)
+        working-directory: mobile
+        run: flutter build ios --debug --no-codesign --dart-define-from-file=config.local.json
 
   # ---------------------------------------------------------------------------
   # Intercetta: credenziali finite nel repo. Il rischio concreto qui non e' teorico:
@@ -417,3 +485,129 @@ jobs:
           fi
 
           echo "Nessuna migrazione esistente e' stata modificata."
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: titoli di PR che non seguono un formato riconoscibile. Non
+  # cambia nulla oggi, ma e' il prerequisito per generare un changelog
+  # automatico in futuro senza dover riscrivere la storia delle PR passate.
+  # Legge il titolo dal payload dell'evento pull_request, quindi non serve
+  # nessun permesso di scrittura sul token.
+  # ---------------------------------------------------------------------------
+  pr-title-lint:
+    name: Titolo PR (conventional commits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Verifica il formato del titolo
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: dipendenze vulnerabili introdotte dal DIFF della PR. `npm audit`
+  # (job sopra) controlla l'intero lockfile ma solo quando gira, non il delta
+  # introdotto: questo job guarda esattamente cosa cambia in questa PR rispetto
+  # alla base. Nessun permesso di scrittura: legge solo i manifest delle
+  # dipendenze, non esegue nulla del codice della PR.
+  # Non fa controllo licenze: l'action lo supporterebbe (`allow-licenses`/
+  # `deny-licenses`), ma richiede una policy di licenze che il team non ha
+  # ancora deciso. Da aggiungere quando quella policy esiste.
+  # ---------------------------------------------------------------------------
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Analizza le dipendenze introdotte dalla PR
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: errori SQL o problemi di ordine/dipendenza nelle migrazioni
+  # NUOVE introdotte da questa PR. `migrations-check` (sopra) verifica solo
+  # che le migrazioni GIA' esistenti non vengano toccate — non dice nulla
+  # sulla validita' di quelle nuove. Qui si applica l'intera sequenza di
+  # migrazioni su un Postgres locale vero (via Docker, gratuito sui runner
+  # pubblici): un errore di sintassi o un vincolo violato fa fallire il job
+  # invece di scoprirsi al primo deploy sul progetto Supabase reale.
+  # Gira solo sulle PR: l'obiettivo e' validare cio' che la PR aggiunge, non
+  # ri-validare ogni volta lo storico gia' verificato in main.
+  #
+  # Il seed viene disabilitato SOLO nel checkout di questo job (config.toml
+  # modificato dopo il checkout, mai committato). Non e' piu' un workaround
+  # per un bug: la collisione di username che rendeva seed.sql non
+  # rieseguibile (i 12 UUID demo condividevano gli stessi primi 12
+  # caratteri esadecimali) e' stata corretta a monte (#22). E' una scelta
+  # di disaccoppiamento deliberata: questo job deve validare le MIGRAZIONI,
+  # non i dati demo — anche se il seed e' corretto, non deve essere lui a
+  # decidere se il job passa o fallisce.
+  # `supabase start` applica gia' da solo tutte le migrazioni su un volume
+  # nuovo (e' cosi' che il bug del seed e' stato scoperto la prima volta:
+  # falliva subito dopo "Applying migration..."): niente `supabase db
+  # reset` separato, che rifarebbe lo stesso lavoro una seconda volta.
+  # ---------------------------------------------------------------------------
+  supabase-migrations-apply:
+    name: Migrazioni Supabase (apply pulito)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+
+      # Stessa versione di package.json (devDependency "supabase"), per non
+      # avere una CLI diversa in CI rispetto a quella usata in locale.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: '2.114.0'
+
+      - name: Disabilita il seed per questo job (verifica solo le migrazioni)
+        run: |
+          python3 - <<'PYEOF'
+          import re
+          with open('supabase/config.toml') as f:
+              content = f.read()
+          patched, n = re.subn(
+              r'(\[db\.seed\]\n(?:#.*\n)*)enabled = true',
+              r'\1enabled = false',
+              content,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("Non ho trovato 'enabled = true' subito dopo [db.seed] in supabase/config.toml: aggiornare questo script se il file e' cambiato di struttura.")
+          with open('supabase/config.toml', 'w') as f:
+              f.write(patched)
+          PYEOF
+
+      - name: Avvia lo stack locale e applica tutte le migrazioni
+        run: supabase start
+
+      - name: Ferma lo stack
+        if: always()
+        run: supabase stop
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: uno script di classificazione (usato dal workflow separato
+  # ci-failure-triage.yml) che smette di corrispondere ai nomi reali dei job
+  # di questo file, o una regressione nella sua logica. E' l'unica rete di
+  # sicurezza su quello script: senza questo job, un nome di job rinominato
+  # qui e non aggiornato in classify-ci-failure.sh si scoprirebbe solo
+  # quando un fallimento reale su main viene classificato male.
+  # ---------------------------------------------------------------------------
+  triage-scripts-test:
+    name: Test script di classificazione triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Esegui i test dello script di classificazione
+        run: .github/scripts/test-classify-ci-failure.sh

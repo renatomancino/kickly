@@ -1,0 +1,241 @@
+# Trasforma un fallimento del workflow "CI" su un push a main in una issue,
+# classificata e assegnata automaticamente. Legge solo il verdetto e i nomi
+# dei job del run appena completato: nessuna chiamata a modelli esterni
+# (GitHub Models e' stato ritirato il 30/07/2026), nessuna esecuzione di
+# codice del branch che ha fallito.
+#
+# Trigger `workflow_run`: osserva il completamento di "CI", non e' un evento
+# diretto su push/pull_request. Per questo tipo di trigger GitHub esegue
+# SEMPRE la definizione del workflow presente sul branch di default (main),
+# mai quella di un branch/fork che ha causato il run osservato — motivo per
+# cui e' sicuro dargli issues: write senza riaprire il problema che ci.yml
+# evita deliberatamente con pull_request_target. Il filtro sotto (evento
+# "push", branch "main") restringe comunque il caso reale ai soli fallimenti
+# di main, escludendo i run delle PR — e si applica ALLO STESSO MODO al
+# replay manuale (workflow_dispatch): un run di PR resta fuori anche se
+# qualcuno prova a rigiocarlo a mano, perche' su un fork il contenuto (e
+# quindi i nomi dei job, che sono stringhe libere nello YAML del fork) non
+# e' fidato. Il filtro a livello di job sotto evita anche di avviare il
+# runner (checkout + prima chiamata API) per la stragrande maggioranza dei
+# completamenti di "CI" che non sono un fallimento su main: solo la
+# variante piu' economica del controllo (senza ancora sapere se il run e'
+# davvero di CI/push/main) puo' girare a livello di `if:` del job, quindi lo
+# step "Determina il run" ripete comunque il controllo completo — e per
+# workflow_dispatch e' l'unico controllo possibile, dato che a quel punto
+# non sappiamo ancora nulla del run scelto.
+#
+# Il trigger workflow_dispatch permette di rigiocare manualmente un run gia'
+# completato (utile per testare questo stesso workflow, o per rielaborare
+# un fallimento vecchio) passando il suo run id — soggetto allo stesso
+# controllo di cui sopra.
+#
+# Tutti i valori che arrivano dal run osservato (nomi dei job, sha, url) sono
+# passati agli step successivi via `env:` e referenziati come "$VAR", mai
+# interpolati direttamente con ${{ }} dentro un `run:`: stessa regola gia'
+# applicata in ci.yml (job migrations-check) per non aprire un'iniezione di
+# comandi via campi che, in astratto, potrebbero contenere caratteri
+# speciali.
+name: Triage fallimento CI
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID di un run gia' completato di CI da (ri)processare manualmente"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: ci-failure-triage-${{ github.event.workflow_run.head_sha || github.event.inputs.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    name: Apri e assegna la issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Filtro economico (nessuna chiamata API): scarta subito la maggior
+    # parte dei completamenti di "CI" che non sono un fallimento su main
+    # (successi, run di PR), senza nemmeno fare il checkout. Non sostituisce
+    # il controllo completo nello step "Determina il run" — qui non
+    # controlliamo ancora il nome del workflow (gia' garantito dal trigger
+    # per workflow_run) ne' possiamo controllare nulla per workflow_dispatch,
+    # che deve sempre passare e farsi verificare dallo step.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - uses: actions/checkout@v7
+
+      # Un solo step decide se procedere, invece di spargere condizioni su
+      # ogni step successivo: normalizza i due trigger diversi (workflow_run
+      # vs workflow_dispatch) in un'unica fonte di verita', applica lo STESSO
+      # controllo di fiducia a entrambi (failure + push + main + workflow
+      # "CI" — un replay manuale di un run di PR viene scartato esattamente
+      # come lo sarebbe stato automaticamente), e fa la deduplica (una issue
+      # aperta per lo stesso commit basta).
+      - name: Determina il run da processare e se procedere
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RUN_ID="$INPUT_RUN_ID"
+          else
+            RUN_ID="$WORKFLOW_RUN_ID"
+          fi
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+
+          RUN_JSON="$(gh api "repos/${GITHUB_REPO}/actions/runs/${RUN_ID}")"
+          CONCLUSION="$(echo "$RUN_JSON" | jq -r '.conclusion')"
+          EVENT="$(echo "$RUN_JSON" | jq -r '.event')"
+          HEAD_BRANCH="$(echo "$RUN_JSON" | jq -r '.head_branch')"
+          WORKFLOW_NAME="$(echo "$RUN_JSON" | jq -r '.name')"
+          HEAD_SHA="$(echo "$RUN_JSON" | jq -r '.head_sha')"
+          HTML_URL="$(echo "$RUN_JSON" | jq -r '.html_url')"
+          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "html_url=${HTML_URL}" >> "$GITHUB_OUTPUT"
+
+          if [ "$CONCLUSION" != "failure" ] || [ "$EVENT" != "push" ] || [ "$HEAD_BRANCH" != "main" ] || [ "$WORKFLOW_NAME" != "CI" ]; then
+            echo "::notice::Il run scelto non e' un fallimento del workflow CI su push a main (conclusion=$CONCLUSION, event=$EVENT, branch=$HEAD_BRANCH, workflow=$WORKFLOW_NAME): non apro nessuna issue."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          EXISTING="$(gh issue list --repo "$GITHUB_REPO" --label ci-failure --state open --search "${HEAD_SHA} in:title" --json number --jq 'length')"
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "::notice::Esiste gia' una issue aperta per il commit ${HEAD_SHA}, salto."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Recupera i job falliti del run
+        if: steps.run.outputs.should_run == 'true'
+        id: jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+        run: |
+          JOBS_JSON="$(gh api "repos/${GITHUB_REPO}/actions/runs/${RUN_ID}/jobs" --jq '[.jobs[] | select(.conclusion=="failure") | .name]')"
+          echo "$JOBS_JSON" | jq -r '.[]' > failed-jobs.txt
+          echo "names_summary=$(echo "$JOBS_JSON" | jq -r 'join(" | ")')" >> "$GITHUB_OUTPUT"
+
+      - name: Classifica il fallimento
+        if: steps.run.outputs.should_run == 'true'
+        id: classify
+        run: |
+          RESULT="$(.github/scripts/classify-ci-failure.sh < failed-jobs.txt)"
+          echo "result=${RESULT}" >> "$GITHUB_OUTPUT"
+
+      - name: Estrai un estratto del log dei job falliti
+        if: steps.run.outputs.should_run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+        run: |
+          gh run view "$RUN_ID" --repo "$GITHUB_REPO" --log-failed > full-log.txt || true
+          {
+            echo '```'
+            # Neutralizza eventuali sequenze di tre backtick nel log: senza
+            # questo, l'output di un test fallito (o in passato un job su un
+            # fork non ancora filtrato dal controllo sopra) potrebbe chiudere
+            # il blocco di codice anzitempo e far renderizzare il resto come
+            # Markdown vero nella issue pubblica.
+            tail -n 150 full-log.txt | sed 's/```/` ` `/g'
+            echo '```'
+          } > excerpt.md
+
+      - name: Prepara il corpo della issue
+        if: steps.run.outputs.should_run == 'true'
+        env:
+          NAMES_SUMMARY: ${{ steps.jobs.outputs.names_summary }}
+          HTML_URL: ${{ steps.run.outputs.html_url }}
+          HEAD_SHA: ${{ steps.run.outputs.head_sha }}
+          CLASSIFY_RESULT: ${{ steps.classify.outputs.result }}
+        run: |
+          {
+            echo "Job falliti: ${NAMES_SUMMARY}"
+            echo "Run: ${HTML_URL}"
+            echo "Commit: ${HEAD_SHA}"
+            echo ""
+            echo "Classificazione automatica: **${CLASSIFY_RESULT}** (in base al nome del job fallito, non al contenuto del log -- vedi \`.github/scripts/classify-ci-failure.sh\`)."
+            echo ""
+            echo "## Estratto log"
+          } > body.md
+          cat excerpt.md >> body.md
+
+      - name: Crea le label se non esistono ancora
+        if: steps.run.outputs.should_run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          gh label create ci-failure --repo "$GITHUB_REPO" --color B60205 --description "Fallimento CI su main aperto automaticamente" --force
+          gh label create agent-triage --repo "$GITHUB_REPO" --color 0E8A16 --description "Classificato banale, assegnato a Copilot" --force
+          gh label create needs-human --repo "$GITHUB_REPO" --color FBCA04 --description "Classificato da investigare, assegnato a un umano" --force
+
+      # Crea la issue con il token di default, SENZA assegnarla qui: se
+      # l'assegnazione a Copilot fallisce (PAT non ancora configurato o
+      # scaduto — vedi .github/COPILOT_AGENT_SETUP.md), la issue deve
+      # comunque esistere ed essere visibile, non sparire con lei.
+      - name: Apri la issue
+        if: steps.run.outputs.should_run == 'true'
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.run.outputs.head_sha }}
+          NAMES_SUMMARY: ${{ steps.jobs.outputs.names_summary }}
+          CLASSIFY_RESULT: ${{ steps.classify.outputs.result }}
+        run: |
+          if [ "$CLASSIFY_RESULT" = "TRIVIAL" ]; then
+            EXTRA_LABEL="agent-triage"
+          else
+            EXTRA_LABEL="needs-human"
+          fi
+          URL="$(gh issue create --repo "$GITHUB_REPO" \
+            --title "CI rotta su main (${HEAD_SHA}): ${NAMES_SUMMARY}" \
+            --label "ci-failure,${EXTRA_LABEL}" \
+            --body-file body.md)"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "number=$(echo "$URL" | grep -oE '[0-9]+$')" >> "$GITHUB_OUTPUT"
+
+      # Passo separato dalla creazione apposta: usa il PAT (non il
+      # GITHUB_TOKEN di default) perche' l'API di assegnazione Copilot
+      # rifiuta i token GitHub App/installation — vedi
+      # .github/COPILOT_AGENT_SETUP.md. Se il PAT manca o e' scaduto questo
+      # step fallisce, ma la issue esiste gia' (step precedente), coerente
+      # con quanto documentato: "le issue restano aperte senza assegnazione,
+      # il resto della pipeline continua a funzionare normalmente".
+      - name: Assegna a Copilot (banale)
+        if: steps.run.outputs.should_run == 'true' && steps.classify.outputs.result == 'TRIVIAL'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_PAT }}
+          GITHUB_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPO" --add-assignee "@copilot"
+
+      - name: Assegna a Mario e Renato (da investigare)
+        if: steps.run.outputs.should_run == 'true' && steps.classify.outputs.result == 'NEEDS_HUMAN'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPO" --add-assignee "mariocelzo,renatomancino"
