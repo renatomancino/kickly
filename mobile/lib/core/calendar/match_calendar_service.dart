@@ -117,7 +117,15 @@ class MatchCalendarService {
   /// automatico divergano alla prima modifica alla logica di scrittura.
   Future<CalendarSyncOutcome> _addOrUpdate(MatchSummary match) async {
     if (!await _ensurePermission()) return CalendarSyncOutcome.permissionDenied;
-    final calendarId = await _writableCalendarId();
+    final lookup = await _writableCalendarLookup();
+    // Due cause diverse dietro allo stesso "niente su cui scrivere": la
+    // query ai calendari può fallire (plugin/canale nativo in errore), o può
+    // riuscire e restituire zero calendari scrivibili. Solo la seconda è
+    // "nessun calendario disponibile" in senso proprio — la prima è un
+    // guasto del plugin, e dirla all'utente come se il dispositivo non
+    // avesse calendari sarebbe fuorviante (e gli negherebbe il "riprova").
+    if (lookup.queryFailed) return CalendarSyncOutcome.pluginError;
+    final calendarId = lookup.calendarId;
     if (calendarId == null) return CalendarSyncOutcome.noWritableCalendar;
 
     final prefs = await SharedPreferences.getInstance();
@@ -198,12 +206,26 @@ class MatchCalendarService {
     return requested.isSuccess && requested.data == true;
   }
 
-  Future<String?> _writableCalendarId() async {
+  /// Usato da [_remove]: lì un fallimento della query e una lista vuota
+  /// portano comunque allo stesso comportamento (l'evento resta salvato per
+  /// un tentativo successivo), quindi non serve distinguerli — a differenza
+  /// di [_addOrUpdate], che li mappa su due [CalendarSyncOutcome] diversi.
+  Future<String?> _writableCalendarId() async =>
+      (await _writableCalendarLookup()).calendarId;
+
+  /// `queryFailed` distingue "il plugin non è riuscito a leggere i
+  /// calendari" (un guasto, vero errore) da "li ha letti e non ce n'è
+  /// nessuno scrivibile" (fatto, non un errore) — [calendarId] da solo non
+  /// basterebbe a chi vuole scegliere il messaggio giusto per l'utente.
+  Future<({String? calendarId, bool queryFailed})>
+  _writableCalendarLookup() async {
     final result = await _plugin.retrieveCalendars();
-    if (!result.isSuccess || result.data == null) return null;
+    if (!result.isSuccess || result.data == null) {
+      return (calendarId: null, queryFailed: true);
+    }
     final calendars = result.data!.where((c) => c.isReadOnly != true).toList();
-    if (calendars.isEmpty) return null;
+    if (calendars.isEmpty) return (calendarId: null, queryFailed: false);
     final preferred = calendars.where((c) => c.isDefault == true).firstOrNull;
-    return (preferred ?? calendars.first).id;
+    return (calendarId: (preferred ?? calendars.first).id, queryFailed: false);
   }
 }

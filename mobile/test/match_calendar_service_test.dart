@@ -33,6 +33,12 @@ class _FakeDeviceCalendarPlugin extends DeviceCalendarPlugin {
   /// alla prima richiesta di permesso su Android.
   bool createThrows = false;
 
+  /// Simula la query ai calendari che fallisce sul serio (canale nativo in
+  /// errore), non semplicemente vuota: `errors` non vuoto è ciò che rende
+  /// `isSuccess` falso, distinguendola da `calendars = []` — quella è una
+  /// risposta riuscita che dice "zero calendari scrivibili".
+  bool retrieveCalendarsFails = false;
+
   int createOrUpdateCalls = 0;
   int deleteCalls = 0;
   Event? lastEvent;
@@ -46,9 +52,14 @@ class _FakeDeviceCalendarPlugin extends DeviceCalendarPlugin {
       Result<bool>()..data = permissionGranted;
 
   @override
-  Future<Result<UnmodifiableListView<Calendar>>> retrieveCalendars() async =>
-      Result<UnmodifiableListView<Calendar>>()
-        ..data = UnmodifiableListView(calendars);
+  Future<Result<UnmodifiableListView<Calendar>>> retrieveCalendars() async {
+    if (retrieveCalendarsFails) {
+      return Result<UnmodifiableListView<Calendar>>()
+        ..errors.add(const ResultError(1, 'guasto simulato'));
+    }
+    return Result<UnmodifiableListView<Calendar>>()
+      ..data = UnmodifiableListView(calendars);
+  }
 
   @override
   Future<Result<String>?> createOrUpdateEvent(Event? event) async {
@@ -253,6 +264,20 @@ void main() {
       final outcome = await service.addManually(_match());
 
       expect(outcome, CalendarSyncOutcome.noWritableCalendar);
+      expect(plugin.createOrUpdateCalls, 0);
+    });
+
+    test('se invece è la query ai calendari a fallire, l\'esito è un guasto del plugin, non "nessun calendario"', () async {
+      // Segnalato in revisione: prima questi due casi finivano entrambi su
+      // noWritableCalendar. Sono cause diverse — un vero guasto merita
+      // "riprova", non un messaggio che suggerisce che il dispositivo non ha
+      // proprio calendari.
+      final plugin = _FakeDeviceCalendarPlugin()..retrieveCalendarsFails = true;
+      final service = MatchCalendarService(plugin: plugin);
+
+      final outcome = await service.addManually(_match());
+
+      expect(outcome, CalendarSyncOutcome.pluginError);
       expect(plugin.createOrUpdateCalls, 0);
     });
 
