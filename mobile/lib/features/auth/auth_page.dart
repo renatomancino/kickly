@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart'
     show GoogleSignInException, GoogleSignInExceptionCode;
@@ -27,18 +28,15 @@ const _authColumnMaxWidth = 430.0;
 /// contorno, quindi possono permettersi di respirare.
 const _primaryButtonHeight = 52.0;
 
-/// Blu del marchio Google (#4285F4). NON è un token del tema, di proposito.
+/// Testo/bordo del pulsante "Continua con Google" (#1F1F1F). NON è un token
+/// del tema, di proposito.
 ///
-/// Le linee guida di Google per il pulsante "Continua con Google" impongono il
-/// marchio nei colori esatti del brand: ridipingerlo con il verde Kickly
-/// renderebbe il pulsante non conforme e, cosa che conta di più, irriconoscibile
-/// nel mezzo secondo in cui l'utente lo cerca con lo sguardo.
-const _googleBlue = Color(0xFF4285F4);
-
-/// Bianco pieno del disco su cui poggia la "G", per la stessa ragione di
-/// [_googleBlue]: il marchio Google va sempre su fondo chiaro, anche quando
-/// l'interfaccia intorno è scura come la nostra.
-const _googleMarkSurface = Color(0xFFFFFFFF);
+/// Le linee guida di Google per il pulsante impongono un fondo chiaro pieno
+/// col logomark ufficiale a colori: ridipingerlo con i token scuri di Kickly
+/// (o anche solo con un nero pieno per il testo) renderebbe il pulsante non
+/// conforme. #1F1F1F è lo stesso grigio-quasi-nero che Google usa sul proprio
+/// bottone chiaro — non un nero #000000 scelto a occhio.
+const _googleButtonTextColor = Color(0xFF1F1F1F);
 
 /// Stile dell'occhiello sopra il titolo.
 ///
@@ -565,23 +563,49 @@ class _BrandLockup extends StatelessWidget {
 }
 
 /// Pulsante "Continua con Google".
+///
+/// Prima era un `OutlinedButton` trasparente: sullo sfondo scuro di Kickly il
+/// bordo sottile si perdeva quasi del tutto, e la "G" era un cerchio disegnato
+/// a mano invece del logomark ufficiale. Ora è una pillola bianca piena, come
+/// il pulsante Apple qui accanto — è anche lo stile che le linee guida Google
+/// raccomandano proprio per le superfici scure: le due opzioni social diventano
+/// una coppia visiva coerente invece di uno pieno e uno quasi invisibile.
 class _GoogleButton extends StatelessWidget {
   const _GoogleButton({required this.onPressed});
 
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
-    onPressed: onPressed,
-    // `minimumSize` e non un `SizedBox(height:)`: l'altezza fissa è una
-    // scatola tight, quindi con il testo di sistema ingrandito l'etichetta
-    // sfonderebbe il pulsante. Il minimo dà lo stesso bersaglio generoso ma
-    // lascia crescere il bottone quando serve.
-    style: OutlinedButton.styleFrom(
-      minimumSize: const Size.fromHeight(_primaryButtonHeight),
+  Widget build(BuildContext context) => SizedBox(
+    // Stessa logica dell'altezza di _AppleButton qui sotto: imposta da fuori
+    // così il bottone resta allineato agli altri pulsanti della colonna anche
+    // se in futuro cambia lo stile interno.
+    height: _primaryButtonHeight,
+    child: ElevatedButton.icon(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: _googleButtonTextColor,
+        disabledBackgroundColor: Colors.white.withValues(alpha: .6),
+        disabledForegroundColor: _googleButtonTextColor.withValues(alpha: .4),
+        // Ombra leggerissima invece dell'elevazione Material di default
+        // (troppo pesante per un pulsante che deve restare secondario
+        // rispetto al CTA verde più sotto nella pagina).
+        elevation: 1,
+        shadowColor: Colors.black.withValues(alpha: .25),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          // Bordo quasi impercettibile: sul bottone Apple bianco non serve
+          // (il bianco pieno si stacca già dallo sfondo scuro), ma qui aiuta
+          // a definire il bordo della pillola contro un fondo altrettanto
+          // chiaro se mai la pagina venisse letta in un tema chiaro futuro.
+          side: BorderSide(color: Colors.black.withValues(alpha: .1)),
+        ),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+      ),
+      icon: const _GoogleMark(),
+      label: const Text('Continua con Google'),
     ),
-    icon: const _GoogleMark(),
-    label: const Text('Continua con Google'),
   );
 }
 
@@ -743,32 +767,28 @@ class _SwitchLink extends StatelessWidget {
   );
 }
 
-/// "G" di Google in un cerchio bianco, come icona del pulsante di accesso.
+/// Logomark ufficiale "G" di Google (i 4 path a colori del brand), come icona
+/// del pulsante di accesso.
 ///
-/// Non è il logomark ufficiale a quattro colori (per quello servirebbe
-/// l'asset esatto di Google), ma una resa volutamente semplice: un cerchio
-/// bianco con la lettera nel blu del brand è una convenzione diffusa e
-/// riconoscibile quando l'asset ufficiale non è incluso nel progetto.
+/// L'SVG è incorporato come stringa invece che come asset in `assets/`: sono
+/// 4 path fissi che non cambiano mai e non vale la pena dichiarare un intero
+/// file/entry in `pubspec.yaml` per questo. I path e i colori esatti sono
+/// quelli delle linee guida di branding di Google (developers.google.com/
+/// identity/branding-guidelines) — non un'approssimazione disegnata a mano
+/// come la versione precedente.
 class _GoogleMark extends StatelessWidget {
   const _GoogleMark();
 
+  static const _svg = '''
+<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+  <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/>
+  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.581C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+</svg>
+''';
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: 20,
-    height: 20,
-    alignment: Alignment.center,
-    decoration: const BoxDecoration(
-      color: _googleMarkSurface,
-      shape: BoxShape.circle,
-    ),
-    child: const Text(
-      'G',
-      style: TextStyle(
-        color: _googleBlue,
-        fontSize: 13,
-        fontWeight: FontWeight.w900,
-        height: 1,
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      SvgPicture.string(_svg, width: 20, height: 20);
 }
