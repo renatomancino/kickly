@@ -125,7 +125,15 @@ segua un formato conventional-commit (`feat:`, `fix:`, `chore:`, ecc.). Non
 cambia nulla oggi, ma rende possibile generare changelog automatico in
 futuro senza retrofitting.
 
-## Design — Blocco B: fallimento CI su main -> issue -> triage gratuito -> Copilot
+## Design — Blocco B: fallimento CI su main -> issue -> triage euristico -> Copilot
+
+**Revisione 2026-08-20 (post-ricerca):** la v1 di questa sezione prevedeva un
+passo di classificazione via GitHub Models. Verificato durante la scrittura
+del piano di implementazione che **GitHub Models e' stato ritirato
+definitivamente il 30 luglio 2026** (playground, catalogo modelli e API di
+inferenza non esistono piu' per nessun cliente). Il passo di classificazione
+e' stato quindi ridisegnato come euristica statica (nessuna chiamata esterna,
+nessuna dipendenza da un prodotto che potrebbe sparire di nuovo) — vedi sotto.
 
 ### Panoramica del flusso
 
@@ -140,17 +148,19 @@ workflow_run "CI" completato con failure, ref = main
      |
      v
 [nuovo workflow] Triage fallimento
-  1. Legge il job/i job falliti del run e ne estrae un estratto del log
-     (ultime N righe dello step fallito, non l'intero log)
-  2. Chiama un modello gratuito via GitHub Models (permesso `models: read`,
-     incluso gratis sui repo pubblici) con un prompt di classificazione:
-     "TRIVIAL" (fix meccanico: test flaky, formattazione, tipo ovvio,
-     dipendenza minore) vs "NEEDS_HUMAN" (tocca auth/migrazioni/RLS, causa
-     non ovvia dal log, richiede una decisione di design)
-  3. Apre una issue con: job fallito, link al run, estratto del log,
-     classificazione e motivazione del modello, label `ci-failure` +
-     (`agent-triage` o `needs-human` a seconda dell'esito)
+  1. Legge quali job del run sono falliti (nomi, non serve il contenuto del
+     log per classificare — vedi tabella euristica sotto)
+  2. Classifica in base al NOME del job fallito, con una tabella statica:
+     TRIVIAL per i job che segnalano problemi meccanici (formattazione, lint,
+     tipo, titolo PR), NEEDS_HUMAN per i job che toccano nativo, sicurezza o
+     schema dati. Nessuna chiamata esterna: e' un lookup in una mappa fissa
+     dentro il workflow stesso.
+  3. Apre una issue con: job fallito, link al run, un estratto del log
+     (ultime N righe dello step fallito, solo come contesto per chi legge),
+     classificazione ed etichetta (`ci-failure` + `agent-triage` o
+     `needs-human` a seconda dell'esito)
   4a. Se TRIVIAL -> assegna l'issue al Copilot coding agent
+      (`copilot-swe-agent[bot]`, via PAT — vedi sotto)
   4b. Se NEEDS_HUMAN -> assegna l'issue a @mariocelzo e @renatomancino
      |
      v
@@ -160,6 +170,46 @@ Copilot (solo caso 4a) lavora in background, apre una PR
 La PR passa dalla CI normale (ci.yml + Blocco A) prima che chiunque la guardi
 ```
 
+### Tabella euristica job -> classificazione
+
+| Job fallito | Classificazione | Perche' |
+|---|---|---|
+| `flutter` | TRIVIAL | analyze/test/format: spesso un test flaky o una riga da riformattare |
+| `pwa` | TRIVIAL | lint/typecheck/build: spesso un errore di tipo puntuale |
+| `pr-title-lint` | TRIVIAL | e' solo un formato di stringa |
+| `secret-scan` | NEEDS_HUMAN | un segreto trovato va sempre valutato da una persona, mai "auto-risolto" |
+| `npm-audit` | NEEDS_HUMAN | una CVE richiede leggere l'advisory, non solo bumpare |
+| `dependency-review` | NEEDS_HUMAN | stesso motivo di npm-audit |
+| `migrations-check` | NEEDS_HUMAN | tocca lo schema dati gia' in produzione |
+| `supabase-migrations-apply` | NEEDS_HUMAN | idem: errori di schema, non di codice applicativo |
+| `android-build` | NEEDS_HUMAN | storicamente la classe di bug piu' profonda del repo (dipendenze native) |
+| `ios-build` | NEEDS_HUMAN | stesso motivo di android-build, ancora meno rodato |
+
+Limite noto e accettato: la tabella guarda *quale* job e' fallito, non *perche'*
+— un fallimento raro-ma-profondo dentro `flutter` verrebbe comunque instradato
+a Copilot come TRIVIAL. Non e' pericoloso (nulla passa senza CI verde), nel
+caso peggiore Copilot ci prova, fallisce, e la PR resta rossa finche' un
+umano non la guarda. Rivedibile in futuro se si rivela troppo grossolana.
+
+### Assegnazione a Copilot: requisiti confermati
+
+Verificato via ricerca (non e' piu' un'incognita):
+
+- Il `GITHUB_TOKEN` automatico di Actions **non** puo' assegnare una issue a
+  Copilot: l'API rifiuta i token di tipo GitHub App/installation
+  indipendentemente dai permessi dichiarati, perche' il consumo Copilot e'
+  fatturato a livello di account personale.
+- Serve un **fine-grained Personal Access Token** con permessi read/write su
+  Issues, Pull requests, Contents, Actions, generato dall'account che user in
+  questo progetto ha la licenza Copilot: **Renato** (deciso il 2026-08-20),
+  salvato come secret del repository (es. `COPILOT_ASSIGN_PAT`). Le
+  assegnazioni automatiche consumano la quota Copilot dell'account di Renato,
+  non quella di Mario.
+- Login esatto da usare come assignee: `copilot-swe-agent[bot]` (altre varianti
+  del nome causano un errore 422).
+- Via `gh` CLI: `gh issue edit <numero> --add-assignee copilot-swe-agent`
+  (autenticato con il PAT, non con il token di default di Actions).
+
 ### Perche' solo push su `main`
 
 Come gia' discusso: le PR falliscono gia' visibilmente per chi le ha aperte
@@ -168,18 +218,23 @@ un fallimento li' e' raro e sempre un segnale reale (conflitto semantico fra
 due PR mergiate in sequenza verde, test flaky sfuggito). Restringere il
 trigger a `push` su `main` (via `workflow_run` che osserva il completamento
 di `ci.yml`, non un trigger diretto su evento PR) evita anche di dover dare
-permessi privilegiati (`issues: write`, `models: read`) a un workflow
-raggiungibile da un fork.
+permessi privilegiati (`issues: write`) a un workflow raggiungibile da un
+fork.
 
-### Permessi necessari (nuovo workflow, separato da `ci.yml`)
+### Permessi e secret necessari (nuovo workflow, separato da `ci.yml`)
 
 ```yaml
 permissions:
   contents: read
-  actions: read      # per leggere i log del run fallito
-  issues: write       # per aprire/assegnare la issue
-  models: read        # per la chiamata di classificazione gratuita
+  actions: read      # per leggere quali job del run sono falliti
+  issues: write       # per aprire la issue e assegnarla ai casi NEEDS_HUMAN
 ```
+
+Piu' un secret a livello di repository, non un permesso del `GITHUB_TOKEN`:
+`COPILOT_ASSIGN_PAT`, il fine-grained PAT dell'account di Renato descritto
+sopra, usato SOLO nello step che assegna l'issue a Copilot nel ramo TRIVIAL
+(il resto del workflow — leggere il run fallito, aprire la issue, assegnarla
+agli umani nel ramo NEEDS_HUMAN — usa il `GITHUB_TOKEN` normale).
 
 Nessuno di questi tocca `ci.yml` esistente: e' un workflow nuovo, separato,
 che si attiva solo a valle di un run completato su `main` — mai su un evento
@@ -192,41 +247,33 @@ aperta con lo stesso SHA di commit nel titolo/corpo (via ricerca sulle issue
 con label `ci-failure`), per evitare duplicati in caso di re-run dello stesso
 workflow fallito.
 
-## Rischi e cose da verificare in fase di implementazione
+## Rischi noti (risolti in fase di ricerca, non piu' incognite)
 
-Questi due punti sono incerti e vanno confermati con una prova pratica prima
-di considerare la pipeline pronta, non sono dettagli implementativi scontati:
+Entrambi i rischi originariamente segnalati come "da verificare" sono stati
+chiariti prima di scrivere il piano di implementazione:
 
-1. **Meccanismo esatto per assegnare programmaticamente una issue al Copilot
-   coding agent via API/Action** — da verificare se esiste un login/bot
-   assegnabile via API (`assignees`) o se serve un passaggio manuale/comando
-   specifico. Se non e' automatizzabile al 100%, il fallback e' che il
-   workflow apra comunque la issue con l'etichetta corretta e Mario/Renato la
-   assegnino a mano a Copilot con un click finche' non si trova la via
-   automatica.
-2. **Endpoint e formato esatto dell'API GitHub Models da Actions** (nome
-   dell'action ufficiale o chiamata REST diretta, modelli disponibili nel
-   tier gratuito, rate limit reali) — da verificare con un run di prova
-   isolato prima di integrarlo nella pipeline.
+1. **GitHub Models e' stato ritirato** (30 luglio 2026) — risolto sostituendo
+   il passo di classificazione con l'euristica statica descritta sopra,
+   invece che con una prova pratica di un'API che non esiste piu'.
+2. **Assegnazione Copilot via API** — confermato che serve un PAT
+   fine-grained (non il `GITHUB_TOKEN` di default), login esatto
+   `copilot-swe-agent[bot]`, legato all'account di Renato. Vedi la sezione
+   dedicata sopra per i dettagli.
 
-Un terzo punto, minore, riguarda A4: se il build iOS senza firma non basta a
-causa di capability che richiedono un profilo di provisioning (vedi sopra).
-Non blocca il resto del rollout: nel caso, il job A4 si rimanda o si
-restringe finche' non si risolve lato progetto Xcode.
-
-Nessuno di questi rischi blocca Blocco A1-A3/A5-A7, che sono indipendenti e
-possono partire subito.
+Resta un punto minore, non bloccante, riguardo ad A4: se il build iOS senza
+firma non bastasse a causa di capability che richiedono un profilo di
+provisioning — ma questo e' gia' stato escluso con un test pratico (vedi
+`docs/superpowers/plans/2026-08-20-ci-ios-build.md`).
 
 ## Piano di rollout
 
 1. Blocco A "sicuro" (A1 dependency-review, A2 CODEOWNERS, A3 toggle nativi,
    A5 smoke test migrazioni, A6 coverage, A7 PR title lint) — una PR sola,
    basso rischio, pronta rapidamente.
-2. A4 iOS build — PR a se', per isolare l'eventuale problema di provisioning
-   senza bloccare il resto di Blocco A.
-3. Blocco B, prova isolata dei due punti a rischio (assegnazione Copilot via
-   API, chiamata GitHub Models) su un workflow minimo di test.
-4. Blocco B, pipeline completa una volta confermati i due punti sopra.
+2. A4 iOS build — PR a se', gia' verificata in locale (vedi piano dedicato).
+3. Blocco B, pipeline completa (nessuno spike separato: i due rischi tecnici
+   sono stati chiariti in fase di ricerca, il piano puo' essere scritto
+   direttamente in modo completo).
 
 ## Testing / verifica
 
@@ -235,10 +282,12 @@ possono partire subito.
   fallisca come atteso; verificare che CODEOWNERS richieda review dove
   previsto; verificare che il job A5 fallisca su una migrazione con un errore
   SQL introdotto apposta e passi su una valida.
-- A4: verificare che il job completi su un branch di prova prima di
-  considerarlo pronto per girare su `main`.
+- A4: gia' verificato in locale (Flutter 3.47.0 + Xcode 26.6, build
+  completata con successo) — resta da confermare il primo run reale su
+  `main` dopo il merge.
 - Blocco B: simulare un fallimento su `main` (es. un job che fallisce di
   proposito su un branch di test rinominato temporaneamente, o un dry-run del
   solo workflow di triage con un run id gia' fallito in passato) e verificare
-  che l'issue venga aperta, classificata e assegnata correttamente in
-  entrambi i rami (TRIVIAL / NEEDS_HUMAN).
+  che l'issue venga aperta, classificata secondo la tabella euristica, e
+  assegnata correttamente in entrambi i rami (TRIVIAL -> Copilot via PAT,
+  NEEDS_HUMAN -> @mariocelzo e @renatomancino).
