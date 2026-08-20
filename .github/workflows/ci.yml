@@ -321,11 +321,12 @@ jobs:
     needs: flutter
     runs-on: macos-latest
     timeout-minutes: 25
-    # `needs.flutter.result == 'success'` va scritto a mano: un `if:`
-    # personalizzato SOSTITUISCE il controllo implicito "prosegui solo se i
-    # job in needs sono andati a buon fine", non si somma ad esso. Senza
-    # questa clausola il job girerebbe comunque su ogni push a main anche
-    # se flutter fallisce, vanificando la dipendenza dichiarata sopra.
+    # `needs.flutter.result == 'success'` esplicito per chiarezza: GitHub
+    # avvolge comunque un `if:` che non usa success()/failure()/always()/
+    # cancelled() in un implicito `success() && (...)`, quindi il gate su
+    # needs dovrebbe gia' applicarsi da solo — ma la regola esatta e'
+    # dibattuta anche nella documentazione/community, quindi la scriviamo
+    # a mano invece di fidarci ciecamente del comportamento implicito.
     if: needs.flutter.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v7
