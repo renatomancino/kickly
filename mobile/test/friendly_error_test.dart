@@ -73,6 +73,9 @@ const _traduzioniAttese = <String, String>{
   'already_member': 'Fai già parte di questa lega.',
   'membership_banned':
       'Non puoi rientrare in questa lega: un admin ti ha rimosso.',
+  'invite_attempts_rate_limited':
+      'Troppi tentativi con questo codice: aspetta qualche minuto '
+      'prima di riprovare.',
   'public_league_not_found': 'Questa lega non esiste più o non è più pubblica.',
   'location_required':
       'Imposta la tua zona per entrare in questa lega: serve a '
