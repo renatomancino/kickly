@@ -498,9 +498,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Verifica il formato del titolo
         uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Intercetta: dipendenze vulnerabili introdotte dal DIFF della PR. `npm audit`
@@ -536,10 +541,21 @@ jobs:
   # invece di scoprirsi al primo deploy sul progetto Supabase reale.
   # Gira solo sulle PR: l'obiettivo e' validare cio' che la PR aggiunge, non
   # ri-validare ogni volta lo storico gia' verificato in main.
-  # `--no-seed`: questo job verifica le MIGRAZIONI, non i dati di seed (sono
-  # due preoccupazioni diverse). supabase/seed.sql ha un bug pre-esistente
-  # e non correlato (collisione di username) che farebbe fallire ogni PR se
-  # il seed girasse qui — tracciato a parte, non e' compito di questo job.
+  #
+  # Il seed viene disabilitato SOLO nel checkout di questo job (config.toml
+  # modificato dopo il checkout, mai committato): supabase/seed.sql ha un
+  # bug pre-esistente e non correlato (i 12 UUID demo condividono gli stessi
+  # primi 12 caratteri esadecimali, quindi il trigger che genera lo username
+  # di default li fa collidere tutti sullo stesso valore, violando il
+  # vincolo unique). Verificato che il bug e' reale su un volume Docker
+  # pulito: senza questo passo, `supabase start` fallisce ad ogni PR — il
+  # job diventerebbe un cancello che non si apre mai. La correzione del seed
+  # stesso e' fuori scope qui: questo job deve validare le migrazioni, non i
+  # dati demo.
+  # `supabase start` applica gia' da solo tutte le migrazioni su un volume
+  # nuovo (e' cosi' che il bug del seed e' stato scoperto la prima volta:
+  # falliva subito dopo "Applying migration..."): niente `supabase db
+  # reset` separato, che rifarebbe lo stesso lavoro una seconda volta.
   # ---------------------------------------------------------------------------
   supabase-migrations-apply:
     name: Migrazioni Supabase (apply pulito)
@@ -555,11 +571,45 @@ jobs:
         with:
           version: '2.114.0'
 
-      - name: Avvia lo stack locale e applica tutte le migrazioni
+      - name: Disabilita il seed per questo job (verifica solo le migrazioni)
         run: |
-          supabase start
-          supabase db reset --no-seed
+          python3 - <<'PYEOF'
+          import re
+          with open('supabase/config.toml') as f:
+              content = f.read()
+          patched, n = re.subn(
+              r'(\[db\.seed\]\n(?:#.*\n)*)enabled = true',
+              r'\1enabled = false',
+              content,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("Non ho trovato 'enabled = true' subito dopo [db.seed] in supabase/config.toml: aggiornare questo script se il file e' cambiato di struttura.")
+          with open('supabase/config.toml', 'w') as f:
+              f.write(patched)
+          PYEOF
+
+      - name: Avvia lo stack locale e applica tutte le migrazioni
+        run: supabase start
 
       - name: Ferma lo stack
         if: always()
         run: supabase stop
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: uno script di classificazione (usato dal workflow separato
+  # ci-failure-triage.yml) che smette di corrispondere ai nomi reali dei job
+  # di questo file, o una regressione nella sua logica. E' l'unica rete di
+  # sicurezza su quello script: senza questo job, un nome di job rinominato
+  # qui e non aggiornato in classify-ci-failure.sh si scoprirebbe solo
+  # quando un fallimento reale su main viene classificato male.
+  # ---------------------------------------------------------------------------
+  triage-scripts-test:
+    name: Test script di classificazione triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Esegui i test dello script di classificazione
+        run: .github/scripts/test-classify-ci-failure.sh
