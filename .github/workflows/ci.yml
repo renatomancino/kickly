@@ -102,7 +102,18 @@ jobs:
 
       - name: Test
         working-directory: mobile
-        run: flutter test
+        run: flutter test --coverage
+
+      # Solo un riepilogo nella UI di Actions, non un gate: l'obiettivo e'
+      # rendere visibile il trend nel tempo, non bloccare la PR su una soglia
+      # arbitraria di copertura. `awk` invece di `lcov` perche' quest'ultimo
+      # non e' preinstallato sui runner ubuntu-latest e non vale la pena
+      # installarlo per un conteggio a una riga.
+      - name: Riepilogo copertura
+        working-directory: mobile
+        run: |
+          echo "### Copertura test Flutter" >> "$GITHUB_STEP_SUMMARY"
+          awk -F',' '/^DA:/{total++; if ($2>0) covered++} END{printf "Righe coperte: %d/%d (%.1f%%)\n", covered, total, (covered/total)*100}' coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
 
       # Solo `lib` e `test`: le altre directory del progetto Flutter (android, ios, web,
       # build) contengono codice generato dai template o dai tool, che non ha senso
