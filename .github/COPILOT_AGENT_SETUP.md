@@ -27,6 +27,11 @@ dichiarati, perche' il consumo Copilot va attribuito a un account personale.
    issue restano aperte senza assegnazione, il resto della pipeline continua
    a funzionare normalmente).
 6. Genera il token e **copialo subito** (non sara' piu' visibile dopo).
+   Trattalo come una credenziale sensibile quanto una password: chi lo
+   possiede puo' scrivere su questo repository e lanciare i suoi workflow
+   (i permessi coprono anche Contents e Actions in scrittura, non solo
+   l'assegnazione a Copilot). Se sospetti che sia trapelato, revocalo subito
+   da `https://github.com/settings/personal-access-tokens` e rigeneralo.
 7. Vai su `https://github.com/renatomancino/kickly/settings/secrets/actions`
    -> "New repository secret".
 8. Nome: `COPILOT_ASSIGN_PAT`. Valore: il token copiato allo step 6. Salva.
@@ -37,7 +42,10 @@ Dopo aver salvato il secret, la verifica reale avviene al primo fallimento
 di `main` classificato come banale (o con un dry-run manuale — vedi il piano
 di implementazione, Task 4). Se l'assegnazione fallisce con un errore 401/403
 nei log del job, il token non ha i permessi giusti o e' scaduto: rigenera
-seguendo di nuovo questi passi.
+seguendo di nuovo questi passi. Controlla anche i commenti/la timeline della
+issue creata: un permesso insufficiente puo' far fallire l'avvio del lavoro
+di Copilot in modo asincrono, con un commento sulla issue invece che con un
+errore visibile nei log del job di triage.
 
 ## Cosa NON serve
 
