@@ -15,7 +15,14 @@
 # replay manuale (workflow_dispatch): un run di PR resta fuori anche se
 # qualcuno prova a rigiocarlo a mano, perche' su un fork il contenuto (e
 # quindi i nomi dei job, che sono stringhe libere nello YAML del fork) non
-# e' fidato.
+# e' fidato. Il filtro a livello di job sotto evita anche di avviare il
+# runner (checkout + prima chiamata API) per la stragrande maggioranza dei
+# completamenti di "CI" che non sono un fallimento su main: solo la
+# variante piu' economica del controllo (senza ancora sapere se il run e'
+# davvero di CI/push/main) puo' girare a livello di `if:` del job, quindi lo
+# step "Determina il run" ripete comunque il controllo completo — e per
+# workflow_dispatch e' l'unico controllo possibile, dato che a quel punto
+# non sappiamo ancora nulla del run scelto.
 #
 # Il trigger workflow_dispatch permette di rigiocare manualmente un run gia'
 # completato (utile per testare questo stesso workflow, o per rielaborare
@@ -54,6 +61,18 @@ jobs:
     name: Apri e assegna la issue
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Filtro economico (nessuna chiamata API): scarta subito la maggior
+    # parte dei completamenti di "CI" che non sono un fallimento su main
+    # (successi, run di PR), senza nemmeno fare il checkout. Non sostituisce
+    # il controllo completo nello step "Determina il run" — qui non
+    # controlliamo ancora il nome del workflow (gia' garantito dal trigger
+    # per workflow_run) ne' possiamo controllare nulla per workflow_dispatch,
+    # che deve sempre passare e farsi verificare dallo step.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
     steps:
       - uses: actions/checkout@v7
 
@@ -69,11 +88,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            RUN_ID="${{ github.event.inputs.run_id }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RUN_ID="$INPUT_RUN_ID"
           else
-            RUN_ID="${{ github.event.workflow_run.id }}"
+            RUN_ID="$WORKFLOW_RUN_ID"
           fi
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
 
@@ -169,33 +191,51 @@ jobs:
           gh label create agent-triage --repo "$GITHUB_REPO" --color 0E8A16 --description "Classificato banale, assegnato a Copilot" --force
           gh label create needs-human --repo "$GITHUB_REPO" --color FBCA04 --description "Classificato da investigare, assegnato a un umano" --force
 
-      # Usa il PAT (non il GITHUB_TOKEN di default): l'API di assegnazione
-      # Copilot rifiuta i token GitHub App/installation. Vedi
-      # .github/COPILOT_AGENT_SETUP.md.
-      - name: Apri la issue (banale -> Copilot)
-        if: steps.run.outputs.should_run == 'true' && steps.classify.outputs.result == 'TRIVIAL'
-        env:
-          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_PAT }}
-          GITHUB_REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ steps.run.outputs.head_sha }}
-          NAMES_SUMMARY: ${{ steps.jobs.outputs.names_summary }}
-        run: |
-          gh issue create --repo "$GITHUB_REPO" \
-            --title "CI rotta su main (${HEAD_SHA}): ${NAMES_SUMMARY}" \
-            --label "ci-failure,agent-triage" \
-            --assignee "@copilot" \
-            --body-file body.md
-
-      - name: Apri la issue (da investigare -> Mario e Renato)
-        if: steps.run.outputs.should_run == 'true' && steps.classify.outputs.result == 'NEEDS_HUMAN'
+      # Crea la issue con il token di default, SENZA assegnarla qui: se
+      # l'assegnazione a Copilot fallisce (PAT non ancora configurato o
+      # scaduto — vedi .github/COPILOT_AGENT_SETUP.md), la issue deve
+      # comunque esistere ed essere visibile, non sparire con lei.
+      - name: Apri la issue
+        if: steps.run.outputs.should_run == 'true'
+        id: issue
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ steps.run.outputs.head_sha }}
           NAMES_SUMMARY: ${{ steps.jobs.outputs.names_summary }}
+          CLASSIFY_RESULT: ${{ steps.classify.outputs.result }}
         run: |
-          gh issue create --repo "$GITHUB_REPO" \
+          if [ "$CLASSIFY_RESULT" = "TRIVIAL" ]; then
+            EXTRA_LABEL="agent-triage"
+          else
+            EXTRA_LABEL="needs-human"
+          fi
+          URL="$(gh issue create --repo "$GITHUB_REPO" \
             --title "CI rotta su main (${HEAD_SHA}): ${NAMES_SUMMARY}" \
-            --label "ci-failure,needs-human" \
-            --assignee "mariocelzo,renatomancino" \
-            --body-file body.md
+            --label "ci-failure,${EXTRA_LABEL}" \
+            --body-file body.md)"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "number=$(echo "$URL" | grep -oE '[0-9]+$')" >> "$GITHUB_OUTPUT"
+
+      # Passo separato dalla creazione apposta: usa il PAT (non il
+      # GITHUB_TOKEN di default) perche' l'API di assegnazione Copilot
+      # rifiuta i token GitHub App/installation — vedi
+      # .github/COPILOT_AGENT_SETUP.md. Se il PAT manca o e' scaduto questo
+      # step fallisce, ma la issue esiste gia' (step precedente), coerente
+      # con quanto documentato: "le issue restano aperte senza assegnazione,
+      # il resto della pipeline continua a funzionare normalmente".
+      - name: Assegna a Copilot (banale)
+        if: steps.run.outputs.should_run == 'true' && steps.classify.outputs.result == 'TRIVIAL'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_PAT }}
+          GITHUB_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPO" --add-assignee "@copilot"
+
+      - name: Assegna a Mario e Renato (da investigare)
+        if: steps.run.outputs.should_run == 'true' && steps.classify.outputs.result == 'NEEDS_HUMAN'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: gh issue edit "$ISSUE_NUMBER" --repo "$GITHUB_REPO" --add-assignee "mariocelzo,renatomancino"
