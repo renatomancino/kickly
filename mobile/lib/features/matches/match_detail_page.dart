@@ -27,10 +27,31 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
   bool _responding = false;
   final _calendarService = MatchCalendarService();
 
+  /// Se questa partita risulta già scritta sul calendario del telefono.
+  ///
+  /// Sta qui e non nel bottone perché va riletto anche al ricaricamento della
+  /// pagina: il percorso automatico può averla aggiunta rispondendo "Ci sono"
+  /// un istante prima, e il bottone deve dirlo invece di invitare a rifare
+  /// qualcosa che è già stato fatto.
+  bool _inCalendar = false;
+
+  /// Tenuto separato da `_responding`: il primo permesso apre un dialogo di
+  /// sistema e l'attesa può non essere istantanea, ma non è una risposta alla
+  /// partita e non deve disabilitare i bottoni "Ci sono / Forse / Non posso".
+  bool _addingToCalendar = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _future ??= AppScope.of(context).repository.getMatch(widget.matchId);
+    unawaited(_refreshCalendarState());
+  }
+
+  /// Lettura da SharedPreferences: non tocca il calendario, quindi non fa
+  /// scattare il dialogo di permesso solo per disegnare l'etichetta giusta.
+  Future<void> _refreshCalendarState() async {
+    final synced = await _calendarService.isSynced(widget.matchId);
+    if (mounted && synced != _inCalendar) setState(() => _inCalendar = synced);
   }
 
   Future<void> _reload() async {
@@ -58,7 +79,17 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
       // quella fallisse, l'evento resterebbe nel calendario di una partita
       // a cui l'utente non risulta iscritto. Il metodo non solleva mai
       // (vedi MatchCalendarService), quindi non serve un try separato qui.
-      unawaited(_calendarService.syncForResponse(summary, response));
+      // `then` e non `await`: la sincronizzazione resta fuori dal percorso
+      // della RSVP esattamente come prima (non la rallenta, non la fa
+      // fallire, non riporta errori). L'aggancio serve solo a rileggere
+      // l'etichetta del bottone quando ha finito, altrimenti dopo un "Ci
+      // sono" andato a buon fine il bottone continuerebbe a proporre di
+      // aggiungere una partita già in calendario.
+      unawaited(
+        _calendarService
+            .syncForResponse(summary, response)
+            .then((_) => _refreshCalendarState()),
+      );
       await _reload();
       if (mounted) {
         ScaffoldMessenger.of(
@@ -73,6 +104,35 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
     } finally {
       if (mounted) setState(() => _responding = false);
     }
+  }
+
+  /// Aggiunta al calendario chiesta esplicitamente dal bottone.
+  ///
+  /// A differenza del percorso automatico, qui ogni esito ha una risposta
+  /// visibile: è tutto il punto dell'azione manuale, perché un tentativo che
+  /// fallisce in silenzio lascia l'utente a chiedersi se abbia funzionato.
+  Future<void> _addToCalendar(MatchSummary summary) async {
+    setState(() => _addingToCalendar = true);
+    final outcome = await _calendarService.addManually(summary);
+    if (!mounted) return;
+    setState(() {
+      _addingToCalendar = false;
+      // Solo un successo cambia l'etichetta: dopo un fallimento il bottone
+      // deve restare invitante, è ancora l'unico modo per riprovare.
+      if (outcome == CalendarSyncOutcome.added) _inCalendar = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(switch (outcome) {
+          CalendarSyncOutcome.added => 'Partita aggiunta al calendario.',
+          CalendarSyncOutcome.permissionDenied => 'Permesso calendario negato. Attivalo nelle impostazioni di Kickly per aggiungere le partite.',
+          CalendarSyncOutcome.noWritableCalendar =>
+            'Nessun calendario disponibile sul dispositivo.',
+          CalendarSyncOutcome.pluginError =>
+            'Non siamo riusciti ad aggiungerla al calendario. Riprova.',
+        }),
+      ),
+    );
   }
 
   @override
@@ -112,6 +172,9 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
             return _MatchContent(
               match: match,
               responding: _responding,
+              inCalendar: _inCalendar,
+              addingToCalendar: _addingToCalendar,
+              onAddToCalendar: () => _addToCalendar(match.summary),
               // `match.summary` è disponibile solo qui, dove il
               // FutureBuilder ha già risolto i dati: _respond stesso resta
               // a un solo argomento, senza dover far attraversare la
@@ -130,12 +193,18 @@ class _MatchContent extends StatelessWidget {
   const _MatchContent({
     required this.match,
     required this.responding,
+    required this.inCalendar,
+    required this.addingToCalendar,
+    required this.onAddToCalendar,
     required this.onRespond,
     required this.onReload,
   });
 
   final MatchDetail match;
   final bool responding;
+  final bool inCalendar;
+  final bool addingToCalendar;
+  final VoidCallback onAddToCalendar;
   final ValueChanged<String> onRespond;
   final Future<void> Function() onReload;
 
@@ -343,6 +412,9 @@ class _MatchContent extends StatelessWidget {
             _DetailsTab(
               match: match,
               responding: responding,
+              inCalendar: inCalendar,
+              addingToCalendar: addingToCalendar,
+              onAddToCalendar: onAddToCalendar,
               onRespond: onRespond,
               onReload: onReload,
             ),
@@ -495,11 +567,17 @@ class _DetailsTab extends StatelessWidget {
   const _DetailsTab({
     required this.match,
     required this.responding,
+    required this.inCalendar,
+    required this.addingToCalendar,
+    required this.onAddToCalendar,
     required this.onRespond,
     required this.onReload,
   });
   final MatchDetail match;
   final bool responding;
+  final bool inCalendar;
+  final bool addingToCalendar;
+  final VoidCallback onAddToCalendar;
   final ValueChanged<String> onRespond;
   final Future<void> Function() onReload;
 
@@ -718,6 +796,42 @@ class _DetailsTab extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+        // Gancio a `currentResponse` e non a `isOpen`: chi ha confermato la
+        // presenza vuole la partita in calendario anche a iscrizioni ormai
+        // chiuse — anzi, proprio allora, perché la partita è certa. Per
+        // contro non ha senso offrirlo a chi ha risposto "Forse" o "Non
+        // posso": segnerebbe in agenda un impegno che non ha preso.
+        if (summary.currentResponse == 'going') ...[
+          SizedBox(
+            width: double.infinity,
+            // Stesso OutlinedButton.icon dei comandi secondari qui sotto
+            // ("Modifica", "Promemoria"): è un'azione di servizio, non deve
+            // competere con i tre pulsanti di conferma presenza appena sopra,
+            // che restano la decisione principale della schermata.
+            child: OutlinedButton.icon(
+              onPressed: addingToCalendar ? null : onAddToCalendar,
+              icon: addingToCalendar
+                  // Il primo tocco può aprire il dialogo di permesso di
+                  // sistema: senza un indicatore l'attesa sembrerebbe un tap
+                  // andato a vuoto.
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      inCalendar
+                          ? Icons.event_available
+                          : Icons.calendar_month_outlined,
+                    ),
+              label: Text(
+                inCalendar
+                    ? 'Aggiunta al calendario'
+                    : 'Aggiungi al calendario',
               ),
             ),
           ),
