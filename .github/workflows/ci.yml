@@ -113,7 +113,10 @@ jobs:
         working-directory: mobile
         run: |
           echo "### Copertura test Flutter" >> "$GITHUB_STEP_SUMMARY"
-          awk -F',' '/^DA:/{total++; if ($2>0) covered++} END{printf "Righe coperte: %d/%d (%.1f%%)\n", covered, total, (covered/total)*100}' coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
+          awk -F',' '/^DA:/{total++; if ($2>0) covered++} END{
+            if (total==0) print "Nessuna riga misurata in lcov.info.";
+            else printf "Righe coperte: %d/%d (%.1f%%)\n", covered, total, (covered/total)*100
+          }' coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
 
       # Solo `lib` e `test`: le altre directory del progetto Flutter (android, ios, web,
       # build) contengono codice generato dai template o dai tool, che non ha senso
