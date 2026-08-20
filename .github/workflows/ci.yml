@@ -433,3 +433,24 @@ jobs:
     steps:
       - name: Verifica il formato del titolo
         uses: amannn/action-semantic-pull-request@v6
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: dipendenze vulnerabili o con licenza incompatibile introdotte
+  # dal DIFF della PR. `npm audit` (job sopra) controlla l'intero lockfile ma
+  # solo quando gira, non il delta introdotto: questo job guarda esattamente
+  # cosa cambia in questa PR rispetto alla base. Nessun permesso di scrittura:
+  # legge solo i manifest delle dipendenze, non esegue nulla del codice della PR.
+  # ---------------------------------------------------------------------------
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Analizza le dipendenze introdotte dalla PR
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
