@@ -26,6 +26,8 @@ Sono cinque minuti, una volta sola.
    | `npm audit` | dipendenze npm con vulnerabilità di livello alto |
    | `Migrazioni immutabili` | modifiche a migrazioni Supabase già applicate in produzione |
    | `CodeQL (JavaScript/TypeScript)` | vulnerabilità nel codice della PWA: input non validato che arriva a una query, un redirect o una risposta |
+   | `Dependency review` | dipendenze vulnerabili introdotte dal diff della PR |
+   | `Migrazioni Supabase (apply pulito)` | migrazioni nuove con errori SQL che oggi si scoprirebbero solo al deploy |
 
    > I nomi qui sopra sono quelli **verificati** che compaiono nell'elenco di
    > GitHub: la CI ha già girato su questo repository (PR #3), quindi la lista
@@ -37,11 +39,19 @@ Sono cinque minuti, una volta sola.
    soggettivo non viene risolto. Vale come parere, non come cancello — e
    funziona già da sola su ogni PR, senza configurazione.
 
+   **Facoltativo, non obbligatorio**: `Titolo PR (conventional commits)`.
+   Utile per abilitare un changelog automatico in futuro, ma non vale la
+   pena bloccare il merge di una PR solo per un titolo mal formattato.
+
 4. Attiva anche **Require branches to be up to date before merging**: senza
    questa, una PR può risultare verde su una base ormai vecchia e rompere `main`
    una volta unita.
 5. Consigliato: **Require a pull request before merging**, così nessuno spinge
    direttamente su `main` scavalcando del tutto la CI.
+6. Attiva **Require review from Code Owners**: usa il file `.github/CODEOWNERS`
+   gia' nel repository per richiedere automaticamente la review di
+   @mariocelzo e @renatomancino su ogni PR, senza doverli aggiungere a mano
+   ogni volta.
 
 ## L'altro interruttore da accendere, mentre sei nelle impostazioni
 
@@ -51,6 +61,21 @@ Sono cinque minuti, una volta sola.
 file governa gli *aggiornamenti di versione* programmati, questo interruttore
 attiva gli *avvisi* quando salta fuori una vulnerabilità nota in una dipendenza
 che stiamo già usando. Il primo è manutenzione ordinaria, il secondo è l'allarme.
+
+## Secret scanning e push protection nativi
+
+Un terzo interruttore nello stesso posto (`Settings` → `Advanced Security` /
+`Code security`): **Secret scanning** e **Push protection**.
+
+Non sostituiscono gitleaks (il job `Secret scan (gitleaks)` gia' nella CI):
+lo completano. gitleaks scandisce il working tree ad ogni PR — utile, ma
+arriva dopo che il segreto e' gia' stato pushato. Push protection blocca il
+push stesso, prima che il segreto entri nella storia del repository; secret
+scanning nativo copre anche superfici che gitleaks non guarda, come issue e
+commenti di PR.
+
+Attivarli non richiede nessuna modifica a `ci.yml`: sono interamente lato
+GitHub, gratuiti sui repository pubblici.
 
 ## Cosa NON serve
 
