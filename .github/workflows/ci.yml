@@ -417,3 +417,19 @@ jobs:
           fi
 
           echo "Nessuna migrazione esistente e' stata modificata."
+
+  # ---------------------------------------------------------------------------
+  # Intercetta: titoli di PR che non seguono un formato riconoscibile. Non
+  # cambia nulla oggi, ma e' il prerequisito per generare un changelog
+  # automatico in futuro senza dover riscrivere la storia delle PR passate.
+  # Legge il titolo dal payload dell'evento pull_request, quindi non serve
+  # nessun permesso di scrittura sul token.
+  # ---------------------------------------------------------------------------
+  pr-title-lint:
+    name: Titolo PR (conventional commits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Verifica il formato del titolo
+        uses: amannn/action-semantic-pull-request@v6
