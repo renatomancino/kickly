@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Privacy manifest dell'app (App Store: "Required Reason API").
+
+  Da primavera 2024 Apple RIFIUTA in fase di review le submission che usano una
+  delle "Required Reason API" senza dichiararne il motivo in un file
+  PrivacyInfo.xcprivacy. Il file va a livello di app (questo) e/o dentro ogni
+  framework/pod di terze parti; Apple unisce le dichiarazioni di tutti.
+
+  Cosa NON serve dichiarare qui, e perche' (verificato, non assunto):
+
+  - Il motore Flutter porta gia' il proprio PrivacyInfo.xcprivacy dentro
+    Flutter.framework (da Flutter 3.19; qui siamo su 3.47) e dichiara da se'
+    FileTimestamp e SystemBootTime per il proprio uso.
+  - I plugin distribuiti come pod hanno gia' il loro manifest, che CocoaPods
+    impacchetta nel rispettivo bundle: shared_preferences_foundation e
+    flutter_local_notifications dichiarano UserDefaults (CA92.1),
+    flutter_secure_storage_darwin, image_picker_ios, url_launcher_ios,
+    google_sign_in_ios e workmanager_apple hanno il proprio.
+  - device_calendar (fork vendorizzato in mobile/third_party/) non ha manifest,
+    ma il sorgente iOS importa solo Flutter, UIKit ed EventKit: nessuna delle
+    cinque categorie a motivazione obbligatoria (file timestamp, spazio disco,
+    boot time, tastiera attiva, user defaults) viene toccata. Dichiararla "per
+    sicurezza" sarebbe un errore quanto ometterla: una dichiarazione non
+    veritiera e' motivo di rifiuto esattamente come una mancante.
+
+  NSPrivacyCollectedDataTypes resta volutamente VUOTO: i tipi di dato raccolti
+  dall'app si dichiarano nella scheda App Privacy di App Store Connect, non qui.
+  Questa sezione serve agli SDK di terze parti che raccolgono dati per conto
+  proprio, e l'app non ne integra nessuno.
+-->
+<plist version="1.0">
+<dict>
+	<!-- Nessun tracking pubblicitario e nessun dominio di tracking: l'app non
+	     integra SDK di advertising/attribuzione e non usa l'IDFA. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!--
+			  Buco reale coperto da questa dichiarazione: cached_network_image
+			  (cache delle immagini di profilo/copertina) e' puro Dart, ma
+			  delega la cache su disco a flutter_cache_manager ->
+			  path_provider_foundation, che chiama le API Foundation via
+			  dart:ffi invece che come plugin CocoaPods tradizionale. Non
+			  essendoci un pod, non c'e' nessun manifest di plugin che lo
+			  copra: la dichiarazione deve stare qui, a livello di app.
+
+			  C617.1 = accesso a timestamp, dimensione e metadati di file
+			  che stanno DENTRO il container dell'app (la cartella di cache),
+			  che e' esattamente l'uso che ne viene fatto.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
