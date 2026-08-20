@@ -543,15 +543,13 @@ jobs:
   # ri-validare ogni volta lo storico gia' verificato in main.
   #
   # Il seed viene disabilitato SOLO nel checkout di questo job (config.toml
-  # modificato dopo il checkout, mai committato): supabase/seed.sql ha un
-  # bug pre-esistente e non correlato (i 12 UUID demo condividono gli stessi
-  # primi 12 caratteri esadecimali, quindi il trigger che genera lo username
-  # di default li fa collidere tutti sullo stesso valore, violando il
-  # vincolo unique). Verificato che il bug e' reale su un volume Docker
-  # pulito: senza questo passo, `supabase start` fallisce ad ogni PR — il
-  # job diventerebbe un cancello che non si apre mai. La correzione del seed
-  # stesso e' fuori scope qui: questo job deve validare le migrazioni, non i
-  # dati demo.
+  # modificato dopo il checkout, mai committato). Non e' piu' un workaround
+  # per un bug: la collisione di username che rendeva seed.sql non
+  # rieseguibile (i 12 UUID demo condividevano gli stessi primi 12
+  # caratteri esadecimali) e' stata corretta a monte (#22). E' una scelta
+  # di disaccoppiamento deliberata: questo job deve validare le MIGRAZIONI,
+  # non i dati demo — anche se il seed e' corretto, non deve essere lui a
+  # decidere se il job passa o fallisce.
   # `supabase start` applica gia' da solo tutte le migrazioni su un volume
   # nuovo (e' cosi' che il bug del seed e' stato scoperto la prima volta:
   # falliva subito dopo "Applying migration..."): niente `supabase db
