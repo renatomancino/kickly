@@ -57,9 +57,19 @@ env:
   # Evita che Next stampi il banner della telemetria e sporchi i log della build.
   NEXT_TELEMETRY_DISABLED: '1'
 
-# NOTA SUL PARALLELISMO: nessun job dichiara `needs`, quindi girano tutti insieme.
-# E' voluto: sono controlli indipendenti e mettere in serie, ad esempio, la build Android
-# dopo i test non aggiungerebbe informazione, allungherebbe solo il tempo di feedback.
+# NOTA SUL PARALLELISMO: la maggior parte dei job non dichiara `needs`, quindi
+# girano tutti insieme — sono controlli indipendenti, e metterli in serie
+# allungherebbe solo il tempo di feedback senza aggiungere informazione.
+# Eccezione deliberata: `android-build` e `ios-build` dipendono da `flutter`
+# (vedi `needs:` sui due job). Scelta esplicita del team: risparmiare i minuti
+# di build nativa (le piu' lente della pipeline) quando il codice Dart di base
+# e' gia' rotto, accettando il costo che un fallimento di `flutter` in quel
+# run non dice piu' se anche le build native avrebbero avuto problemi — lo si
+# scopre solo al push successivo. Le due build native restano in parallelo
+# fra loro (nessuna `needs` reciproca), e nessun altro job dipende da questi
+# due: la classe di bug che intercettano (dipendenze native, manifest merge)
+# e' comunque invisibile a `flutter analyze`/test, quindi mettere log in
+# serie oltre a `flutter` non aggiungerebbe altro segnale.
 jobs:
   # ---------------------------------------------------------------------------
   # Intercetta: errori e warning dell'analizzatore Dart, regressioni sui 16 test di
@@ -196,6 +206,7 @@ jobs:
   # ---------------------------------------------------------------------------
   android-build:
     name: Android (APK debug)
+    needs: flutter
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -307,9 +318,16 @@ jobs:
   # ---------------------------------------------------------------------------
   ios-build:
     name: iOS (debug, no-codesign)
+    needs: flutter
     runs-on: macos-latest
     timeout-minutes: 25
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # `needs.flutter.result == 'success'` esplicito per chiarezza: GitHub
+    # avvolge comunque un `if:` che non usa success()/failure()/always()/
+    # cancelled() in un implicito `success() && (...)`, quindi il gate su
+    # needs dovrebbe gia' applicarsi da solo — ma la regola esatta e'
+    # dibattuta anche nella documentazione/community, quindi la scriviamo
+    # a mano invece di fidarci ciecamente del comportamento implicito.
+    if: needs.flutter.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v7
 
