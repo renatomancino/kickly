@@ -495,9 +495,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Stessa versione di package.json (devDependency "supabase"), per non
+      # avere una CLI diversa in CI rispetto a quella usata in locale.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: '2.114.0'
 
       - name: Avvia lo stack locale e applica tutte le migrazioni
         run: |
