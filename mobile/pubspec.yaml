@@ -60,6 +60,11 @@ dependencies:
   # mentre qui flutter_local_notifications porta già `timezone ^0.10.1`, quindi
   # le versioni successive non risolvono.
   device_calendar: ^3.9.0
+  # Serve al logomark ufficiale di Google sul pulsante "Continua con Google"
+  # (auth_page.dart): il logo è 4 path a colori diversi, troppo per un'icona
+  # Material o un CustomPainter scritto a mano senza rischiare di sbagliare le
+  # curve.
+  flutter_svg: 2.3.0
 
 # Copia vendorizzata di device_calendar 3.9.0: il lato Android del pacchetto
 # pubblicato NON è utilizzabile con Flutter/AGP attuali, per due motivi
