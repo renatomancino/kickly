@@ -482,6 +482,10 @@ jobs:
   # invece di scoprirsi al primo deploy sul progetto Supabase reale.
   # Gira solo sulle PR: l'obiettivo e' validare cio' che la PR aggiunge, non
   # ri-validare ogni volta lo storico gia' verificato in main.
+  # `--no-seed`: questo job verifica le MIGRAZIONI, non i dati di seed (sono
+  # due preoccupazioni diverse). supabase/seed.sql ha un bug pre-esistente
+  # e non correlato (collisione di username) che farebbe fallire ogni PR se
+  # il seed girasse qui — tracciato a parte, non e' compito di questo job.
   # ---------------------------------------------------------------------------
   supabase-migrations-apply:
     name: Migrazioni Supabase (apply pulito)
@@ -498,7 +502,7 @@ jobs:
       - name: Avvia lo stack locale e applica tutte le migrazioni
         run: |
           supabase start
-          supabase db reset
+          supabase db reset --no-seed
 
       - name: Ferma lo stack
         if: always()
