@@ -172,7 +172,14 @@ La PR passa dalla CI normale (ci.yml + Blocco A) prima che chiunque la guardi
 
 ### Tabella euristica job -> classificazione
 
-| Job fallito | Classificazione | Perche' |
+La colonna "Job fallito" qui sotto usa gli id YAML per brevita'. L'API di
+GitHub restituisce pero' il **nome visualizzato** del job (il valore di
+`name:`, es. `Flutter (analyze, test, format)`), non l'id: e' quella stringa
+completa che lo script di classificazione confronta davvero — vedi
+`docs/superpowers/plans/2026-08-20-ci-failure-triage-pipeline.md` per il
+dettaglio implementativo.
+
+| Job fallito (id YAML) | Classificazione | Perche' |
 |---|---|---|
 | `flutter` | TRIVIAL | analyze/test/format: spesso un test flaky o una riga da riformattare |
 | `pwa` | TRIVIAL | lint/typecheck/build: spesso un errore di tipo puntuale |
