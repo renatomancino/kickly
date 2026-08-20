@@ -81,6 +81,13 @@ jobs:
             exit 0
           fi
 
+          WORKFLOW_NAME="$(echo "$RUN_JSON" | jq -r '.name')"
+          if [ "$WORKFLOW_NAME" != "CI" ]; then
+            echo "::warning::Il run scelto appartiene al workflow '$WORKFLOW_NAME', non a 'CI'. Non apro nessuna issue."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           EXISTING="$(gh issue list --repo "${{ github.repository }}" --label ci-failure --state open --search "${HEAD_SHA} in:title" --json number --jq 'length')"
           if [ "$EXISTING" -gt 0 ]; then
             echo "::notice::Esiste gia' una issue aperta per il commit ${HEAD_SHA}, salto."
