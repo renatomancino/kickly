@@ -33,6 +33,18 @@ check "NEEDS_HUMAN" "Migrazioni immutabili"
 check "NEEDS_HUMAN" "Migrazioni Supabase (apply pulito)"
 check "NEEDS_HUMAN" "Flutter (analyze, test, format)" "Android (APK debug)"
 
+# Regressione: l'ultima riga di stdin senza newline finale non deve
+# essere ignorata silenziosamente (bug reale trovato in code review:
+# `while read` senza `|| [ -n "$job" ]` scarta l'ultimo job se lo stdin
+# non termina con \n).
+actual="$(printf 'Flutter (analyze, test, format)\nAndroid (APK debug)' | ./classify-ci-failure.sh)"
+if [ "$actual" != "NEEDS_HUMAN" ]; then
+  echo "FAIL: ultima riga senza newline -> atteso 'NEEDS_HUMAN', ottenuto '$actual'"
+  fail=1
+else
+  echo "OK: ultima riga senza newline -> $actual"
+fi
+
 # Nessun job in input (edge case difensivo)
 actual="$(printf '' | ./classify-ci-failure.sh)"
 if [ "$actual" != "NEEDS_HUMAN" ]; then

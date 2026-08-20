@@ -24,7 +24,7 @@ TRIVIAL_JOBS=(
 
 classification="TRIVIAL"
 any_job="no"
-while IFS= read -r job; do
+while IFS= read -r job || [ -n "$job" ]; do
   [ -z "$job" ] && continue
   any_job="yes"
   is_trivial="no"
