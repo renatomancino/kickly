@@ -192,8 +192,7 @@ jobs:
   # Build di debug e non release: salta R8/minificazione (che qui non aggiungerebbero
   # segnale) ma attraversa comunque tutta la configurazione Gradle, la compilazione dei
   # plugin e il manifest merge, cioe' esattamente dove si rompeva.
-  # Nessuna build iOS: i runner macOS sono 10x piu' lenti e costosi, e il valore aggiunto
-  # su un progetto senza codice nativo iOS custom non lo giustifica.
+  # Build iOS: vedi il job ios-build subito sotto (solo su push a main).
   # ---------------------------------------------------------------------------
   android-build:
     name: Android (APK debug)
@@ -313,6 +312,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v7
+
+      - name: Mostra la versione di Xcode del runner
+        run: xcodebuild -version
 
       - uses: subosito/flutter-action@v2
         with:
