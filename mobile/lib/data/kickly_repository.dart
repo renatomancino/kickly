@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -1724,6 +1725,8 @@ double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
 
 double _radians(double degrees) => degrees * math.pi / 180;
 
+const _introSeenPrefsKey = 'kickly.onboarding.introSeen';
+
 class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppState({required this.repository});
 
@@ -1733,6 +1736,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool _initializing = true;
   bool _demoSession = false;
   bool _onboardingComplete = false;
+  // Non ha niente a che fare con `_onboardingComplete` (quella è il form
+  // "che giocatore sei?" post-signup): questo flag è solo "il dispositivo ha
+  // già visto la vetrina a episodi pre-login almeno una volta", per non
+  // rimostrarla a ogni riavvio dell'app finché resta disinstallata.
+  bool _introSeen = false;
   KicklyNotification? latestNotification;
   int notificationRevision = 0;
 
@@ -1747,9 +1755,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool get isSignedIn =>
       repository.isDemo ? _demoSession : repository.currentUserId != null;
   bool get onboardingComplete => _onboardingComplete;
+  bool get introSeen => _introSeen;
 
   Future<void> initialize() async {
     WidgetsBinding.instance.addObserver(this);
+    // Letto prima di refreshSession: il primo redirect del router (in
+    // app.dart) decide già "vetrina o login" in base a questo valore, quindi
+    // dev'essere pronto prima che _initializing torni false.
+    final prefs = await SharedPreferences.getInstance();
+    _introSeen = prefs.getBool(_introSeenPrefsKey) ?? false;
     if (!repository.isDemo) {
       _authSubscription = repository.authStateChanges?.listen(
         (_) => refreshSession(),
@@ -1816,6 +1830,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> completeOnboarding() async {
     _onboardingComplete = true;
+    notifyListeners();
+  }
+
+  /// Chiamato sia dal tap "Comincia" sull'ultimo passo della vetrina, sia
+  /// dalla X per saltarla: in entrambi i casi il dispositivo non deve
+  /// rivederla al prossimo avvio, quindi il flag va scritto su disco subito,
+  /// non solo tenuto in memoria.
+  Future<void> completeIntro() async {
+    _introSeen = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_introSeenPrefsKey, true);
     notifyListeners();
   }
 

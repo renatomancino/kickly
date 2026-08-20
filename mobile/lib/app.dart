@@ -17,6 +17,7 @@ import 'features/matches/match_form_page.dart';
 import 'features/matches/match_result_page.dart';
 import 'features/matches/matches_page.dart';
 import 'features/notifications/notifications_page.dart';
+import 'features/onboarding/story_onboarding_page.dart';
 import 'features/profile/profile_page.dart';
 import 'features/profile/profile_editor_page.dart';
 import 'features/profile/player_profile_page.dart';
@@ -73,13 +74,23 @@ class _KicklyAppState extends State<KicklyApp> {
       if (widget.appState.initializing) {
         return path == '/splash' ? null : '/splash';
       }
-      if (!widget.appState.isSignedIn) return authPath ? null : '/login';
+      if (!widget.appState.isSignedIn) {
+        // La vetrina a episodi si vede una sola volta, al primissimo avvio
+        // del dispositivo: finché AppState.introSeen non è true (letto da
+        // disco già in AppState.initialize()), qualunque rotta non
+        // autenticata viene dirottata lì, prima ancora del login.
+        if (!widget.appState.introSeen) {
+          return path == '/welcome' ? null : '/welcome';
+        }
+        return authPath ? null : '/login';
+      }
       if (!widget.appState.onboardingComplete) {
         return path == '/onboarding' ? null : '/onboarding';
       }
       if ((authPath && path != '/update-password') ||
           path == '/splash' ||
           path == '/onboarding' ||
+          path == '/welcome' ||
           path == '/') {
         return '/dashboard';
       }
@@ -87,6 +98,7 @@ class _KicklyAppState extends State<KicklyApp> {
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
+      GoRoute(path: '/welcome', builder: (_, _) => const StoryOnboardingPage()),
       GoRoute(
         path: '/login',
         builder: (_, _) => const AuthPage(variant: AuthVariant.login),
