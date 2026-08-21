@@ -144,9 +144,8 @@ class _AccountDeletionPageState extends State<AccountDeletionPage> {
       if (mounted) await AppScope.of(context).appState.signOut();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(error))));
         // Caso raro (corsa fra il controllo fatto al caricamento della
         // pagina e questo tap: nel frattempo l'utente e' tornato owner di
         // una lega con altri membri): request_account_deletion() ricontrolla
@@ -212,7 +211,11 @@ class _AccountDeletionPageState extends State<AccountDeletionPage> {
                   'Perdi foto profilo, nome, data di nascita e città. Restano, '
                   'in forma anonima, le partite giocate e le statistiche '
                   'condivise con le tue leghe. Non si torna indietro.',
-                  style: TextStyle(color: AppTheme.muted, fontSize: 13, height: 1.45),
+                  style: TextStyle(
+                    color: AppTheme.muted,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
