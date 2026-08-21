@@ -86,6 +86,13 @@ const _traduzioniAttese = <String, String>{
   'cannot_remove_owner': 'Il proprietario della lega non può essere rimosso.',
   'cannot_change_owner_role': 'Il ruolo del proprietario non si può cambiare: serve trasferire la lega.',
   'already_owner': 'Questo giocatore è già il proprietario della lega.',
+
+  // Sollevati da request_account_deletion() (vedi
+  // supabase/migrations/20260821090000_account_deletion.sql).
+  'account_has_blocking_leagues':
+      'Prima di eliminare l\'account devi risolvere la proprietà delle leghe che gestisci: trasferiscile o eliminale.',
+  'account_already_deleted': 'Questo account è già stato eliminato.',
+
   'communication_rate_limited': 'Hai pubblicato un avviso da poco: aspetta qualche minuto prima del prossimo.',
   'reminder_rate_limited': 'Hai già inviato un promemoria da poco: aspetta prima di inviarne un altro.',
   'no_reminder_recipients':

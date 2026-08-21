@@ -894,6 +894,15 @@ String friendlyError(Object error) {
     return 'Questo giocatore è già il proprietario della lega.';
   }
 
+  // Cancellazione account: codici sollevati da request_account_deletion().
+  if (text.contains('account_has_blocking_leagues')) {
+    return 'Prima di eliminare l\'account devi risolvere la proprietà delle '
+        'leghe che gestisci: trasferiscile o eliminale.';
+  }
+  if (text.contains('account_already_deleted')) {
+    return 'Questo account è già stato eliminato.';
+  }
+
   // Limiti di frequenza: qui il messaggio generico è particolarmente cattivo
   // perché invita a "riprovare tra poco" senza dire quanto, e l'utente riprova
   // subito continuando a fallire.
