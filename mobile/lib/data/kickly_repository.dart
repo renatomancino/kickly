@@ -1673,11 +1673,13 @@ class KicklyRepository {
   /// come successo silenzioso, non come errore da mostrare all'utente.
   Future<void> blockUser(String blockedUserId) async {
     if (isDemo) return;
-    await client!.from('user_blocks').upsert(
-      {'blocker_id': currentUserId, 'blocked_id': blockedUserId},
-      onConflict: 'blocker_id,blocked_id',
-      ignoreDuplicates: true,
-    );
+    await client!
+        .from('user_blocks')
+        .upsert(
+          {'blocker_id': currentUserId, 'blocked_id': blockedUserId},
+          onConflict: 'blocker_id,blocked_id',
+          ignoreDuplicates: true,
+        );
   }
 
   Future<MatchPostGame> _loadPostGame(
