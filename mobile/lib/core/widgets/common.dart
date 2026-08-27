@@ -903,6 +903,18 @@ String friendlyError(Object error) {
     return 'Questo account è già stato eliminato.';
   }
 
+  // Report e blocco (20260821090000_report_and_block_tables.sql): niente
+  // RPC dedicata, quindi niente `raise exception` — l'auto-blocco e
+  // l'auto-segnalazione sono rifiutati da un CHECK constraint sulla
+  // tabella, e il messaggio grezzo di Postgres arriva col nome del vincolo
+  // dentro, stesso schema del caso "username" piu' in basso in questo file.
+  if (text.contains('user_blocks_no_self_block')) {
+    return 'Non puoi bloccare te stesso.';
+  }
+  if (text.contains('user_reports_no_self_report')) {
+    return 'Non puoi segnalare te stesso.';
+  }
+
   // Limiti di frequenza: qui il messaggio generico è particolarmente cattivo
   // perché invita a "riprovare tra poco" senza dire quanto, e l'utente riprova
   // subito continuando a fallire.

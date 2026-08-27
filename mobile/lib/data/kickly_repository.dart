@@ -1686,6 +1686,53 @@ class KicklyRepository {
     );
   }
 
+  /// Segnala un utente a chi amministra il progetto.
+  ///
+  /// Nessuna coda di moderazione in-app (vedi "Non-obiettivi" della spec di
+  /// sicurezza): la riga finisce in `user_reports`, leggibile solo da SQL/
+  /// dashboard Supabase (nessuna policy SELECT per `authenticated`), quindi
+  /// un insert riuscito senza eccezioni e' l'unica conferma che serve alla UI.
+  Future<void> reportUser({
+    required String reportedUserId,
+    String? leagueId,
+    required String reason,
+    String? details,
+  }) async {
+    if (isDemo) return;
+    final trimmedDetails = details?.trim();
+    await client!.from('user_reports').insert({
+      'reporter_id': currentUserId,
+      'reported_user_id': reportedUserId,
+      'league_id': leagueId,
+      'reason': reason,
+      'details': trimmedDetails == null || trimmedDetails.isEmpty
+          ? null
+          : trimmedDetails,
+    });
+  }
+
+  /// Blocca un utente: da questo momento nessuno dei due vede piu' il
+  /// profilo dell'altro nella lega condivisa (filtro lato RLS, vedi
+  /// `private.is_blocked_pair` in
+  /// 20260821090100_block_visibility_filter.sql), e sparisce dalle liste
+  /// membri/classifica di entrambi (20260821090200_league_lists_hide_blocked_users.sql).
+  ///
+  /// `upsert` con `ignoreDuplicates` invece di `insert` semplice: bloccare
+  /// due volte lo stesso utente (doppio tap, retry di rete) non deve far
+  /// fallire la seconda chiamata con una violazione di chiave primaria — il
+  /// risultato desiderato ("e' bloccato") e' gia' vero, quindi va trattato
+  /// come successo silenzioso, non come errore da mostrare all'utente.
+  Future<void> blockUser(String blockedUserId) async {
+    if (isDemo) return;
+    await client!
+        .from('user_blocks')
+        .upsert(
+          {'blocker_id': currentUserId, 'blocked_id': blockedUserId},
+          onConflict: 'blocker_id,blocked_id',
+          ignoreDuplicates: true,
+        );
+  }
+
   Future<MatchPostGame> _loadPostGame(
     String matchId,
     JsonMap match,
