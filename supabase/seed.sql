@@ -2,7 +2,17 @@
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
   email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-  created_at, updated_at, confirmation_token, recovery_token
+  created_at, updated_at, confirmation_token, recovery_token,
+  -- Senza questi due, restano NULL (nessun default a livello di colonna,
+  -- a differenza di confirmation_token/recovery_token qui sopra o di
+  -- phone_change/phone_change_token/email_change_token_current, che invece
+  -- hanno gia' un default ''::character varying). Le versioni recenti di
+  -- GoTrue leggono ogni utente in una struct Go con questi campi come
+  -- string non-nullable: uno scan di NULL fa fallire l'intera query con
+  -- "Database error querying schema" (500) al primo POST
+  -- /auth/v1/token?grant_type=password, per QUALUNQUE utente demo — non un
+  -- problema di un singolo utente o di questa migrazione.
+  email_change, email_change_token_new
 )
 select
   '00000000-0000-0000-0000-000000000000',
@@ -14,7 +24,7 @@ select
   now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb,
-  now(), now(), '', ''
+  now(), now(), '', '', '', ''
 from (values
   -- Note: the 2nd UUID group (was a constant '0000' for every row) now carries a
   -- per-user value. private.handle_new_user() derives the default profile

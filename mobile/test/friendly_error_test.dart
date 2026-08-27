@@ -218,6 +218,30 @@ void main() {
       );
     });
 
+    test('bloccare o segnalare se stessi restituisce un messaggio dedicato, non quello generico dei vincoli del database', () {
+      // user_blocks e user_reports rifiutano l'auto-blocco/l'auto-report
+      // con un CHECK constraint (niente RPC, vedi
+      // 20260821090000_report_and_block_tables.sql): il messaggio che
+      // arriva al client e' quindi il testo grezzo di Postgres col nome
+      // del vincolo dentro, non un codice sollevato con `raise exception`.
+      expect(
+        friendlyError(
+          'PostgrestException(message: new row for relation "user_blocks" '
+          'violates check constraint "user_blocks_no_self_block", '
+          'code: 23514, details: null, hint: null)',
+        ),
+        'Non puoi bloccare te stesso.',
+      );
+      expect(
+        friendlyError(
+          'PostgrestException(message: new row for relation "user_reports" '
+          'violates check constraint "user_reports_no_self_report", '
+          'code: 23514, details: null, hint: null)',
+        ),
+        'Non puoi segnalare te stesso.',
+      );
+    });
+
     test(
       'un errore senza codice riconoscibile non lascia la schermata vuota',
       () {

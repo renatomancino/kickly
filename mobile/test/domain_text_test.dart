@@ -148,6 +148,33 @@ void main() {
       expect(skillLabel(null), isNull);
       expect(skillLabel('pro'), isNull);
     });
+
+    test('ogni motivo di segnalazione ha un\'etichetta italiana, e un motivo sconosciuto non sparisce', () {
+      // I codici sono vincolati anche lato database
+      // (user_reports_reason_check in
+      // 20260821090000_report_and_block_tables.sql): se le due liste
+      // divergono, un insert dal client fallirebbe silenziosamente con
+      // l'errore generico invece di un messaggio utile.
+      expect(
+        reportReasonLabel('inappropriate_content'),
+        'Contenuto inappropriato',
+      );
+      expect(
+        reportReasonLabel('harassment'),
+        'Comportamento offensivo o molestie',
+      );
+      expect(reportReasonLabel('spam'), 'Spam o pubblicità');
+      expect(reportReasonLabel('fake_profile'), 'Profilo falso');
+      expect(reportReasonLabel('other'), 'Altro');
+      expect(reportReasonLabel('mai_visto'), 'mai_visto');
+      expect(reportReasons, [
+        'inappropriate_content',
+        'harassment',
+        'spam',
+        'fake_profile',
+        'other',
+      ]);
+    });
   });
 
   group('Parsing difensivo dei payload', () {
