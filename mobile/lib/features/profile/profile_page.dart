@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../core/legal/legal_links.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common.dart';
 import '../../data/models.dart';
@@ -206,6 +207,33 @@ class _ProfilePageState extends State<ProfilePage> {
                           // GlobalKey detected in widget tree", visto in log
                           // reali) per doppia navigazione nello stesso frame.
                           onTap: () => AppScope.of(context).appState.signOut(),
+                        ),
+                      ],
+                    ),
+                    // Card separata (non dentro _AccountCard sopra) di
+                    // proposito: un piano parallelo (cancellazione account,
+                    // vedi docs/superpowers/specs/2026-08-21-security-store-publishing-design.md,
+                    // Sezione 1) aggiunge una riga `danger: true` "Elimina
+                    // account" proprio dentro quella _AccountCard. Tenere i
+                    // link legali in una card a parte evita che i due piani
+                    // tocchino lo stesso blocco di codice in parallelo.
+                    const SizedBox(height: 28),
+                    const _SectionLabel('Legale'),
+                    const SizedBox(height: 10),
+                    _AccountCard(
+                      children: [
+                        _SettingRow(
+                          icon: Icons.privacy_tip_outlined,
+                          title: 'Privacy Policy',
+                          subtitle: 'Come trattiamo i tuoi dati',
+                          onTap: () =>
+                              openLegalUrl(context, LegalLinks.privacy),
+                        ),
+                        _SettingRow(
+                          icon: Icons.description_outlined,
+                          title: 'Termini di servizio',
+                          subtitle: 'Le regole d\'uso di Kickly',
+                          onTap: () => openLegalUrl(context, LegalLinks.terms),
                         ),
                       ],
                     ),
