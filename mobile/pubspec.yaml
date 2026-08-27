@@ -42,7 +42,7 @@ dependencies:
   flutter_local_notifications: 19.4.2
   # Task periodico che controlla le notifiche non lette ad app chiusa, così il
   # telefono avvisa anche senza un canale push FCM/APNs configurato.
-  workmanager: 0.10.7
+  workmanager: 0.10.9
   # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
   # che gira in un isolate separato senza accesso allo stato dell'app.
   shared_preferences: 2.5.5
