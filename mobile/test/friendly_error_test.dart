@@ -89,8 +89,7 @@ const _traduzioniAttese = <String, String>{
 
   // Sollevati da request_account_deletion() (vedi
   // supabase/migrations/20260821090000_account_deletion.sql).
-  'account_has_blocking_leagues':
-      'Prima di eliminare l\'account devi risolvere la proprietà delle leghe che gestisci: trasferiscile o eliminale.',
+  'account_has_blocking_leagues': 'Prima di eliminare l\'account devi risolvere la proprietà delle leghe che gestisci: trasferiscile o eliminale.',
   'account_already_deleted': 'Questo account è già stato eliminato.',
 
   'communication_rate_limited': 'Hai pubblicato un avviso da poco: aspetta qualche minuto prima del prossimo.',
