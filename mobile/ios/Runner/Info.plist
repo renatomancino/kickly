@@ -71,6 +71,12 @@
 		<array>
 			<string>kickly-notification-poll-unique</string>
 		</array>
+		<!-- L'app usa solo TLS standard (HTTPS verso Supabase) e hashing SHA-256
+	     per il nonce OAuth (vedi lib/core/security/oauth_nonce.dart), nessuna
+	     crittografia proprietaria: dichiarando false qui evitiamo che App
+	     Store Connect chieda la export compliance ad ogni submission. -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
