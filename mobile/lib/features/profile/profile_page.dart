@@ -208,6 +208,13 @@ class _ProfilePageState extends State<ProfilePage> {
                           // reali) per doppia navigazione nello stesso frame.
                           onTap: () => AppScope.of(context).appState.signOut(),
                         ),
+                        _SettingRow(
+                          icon: Icons.delete_forever_outlined,
+                          title: 'Elimina account',
+                          subtitle: 'Cancella i tuoi dati personali',
+                          danger: true,
+                          onTap: () => context.push('/profile/delete-account'),
+                        ),
                       ],
                     ),
                     // Card separata (non dentro _AccountCard sopra) di

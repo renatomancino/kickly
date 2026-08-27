@@ -18,6 +18,7 @@ import 'features/matches/match_result_page.dart';
 import 'features/matches/matches_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/onboarding/story_onboarding_page.dart';
+import 'features/profile/account_deletion_page.dart';
 import 'features/profile/profile_page.dart';
 import 'features/profile/profile_editor_page.dart';
 import 'features/profile/player_profile_page.dart';
@@ -167,6 +168,10 @@ class _KicklyAppState extends State<KicklyApp> {
       GoRoute(
         path: '/profile/edit',
         builder: (_, _) => const ProfileEditorPage(),
+      ),
+      GoRoute(
+        path: '/profile/delete-account',
+        builder: (_, _) => const AccountDeletionPage(),
       ),
       GoRoute(
         path: '/player/:username',

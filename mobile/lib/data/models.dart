@@ -204,6 +204,31 @@ String leagueRoleLabel(String role) => switch (role) {
   _ => role,
 };
 
+/// Una lega che blocca la cancellazione dell'account: il chiamante ne è
+/// owner e ci sono altri membri attivi oltre a lui. Forma restituita da
+/// `get_account_deletion_blockers()` (vedi
+/// supabase/migrations/20260821090000_account_deletion.sql).
+class AccountDeletionBlocker {
+  const AccountDeletionBlocker({
+    required this.leagueId,
+    required this.leagueSlug,
+    required this.leagueName,
+    required this.activeMemberCount,
+  });
+
+  factory AccountDeletionBlocker.fromMap(JsonMap map) => AccountDeletionBlocker(
+    leagueId: map['league_id'].toString(),
+    leagueSlug: map['league_slug']?.toString() ?? '',
+    leagueName: map['league_name']?.toString() ?? 'Lega Kickly',
+    activeMemberCount: asInt(map['active_member_count']),
+  );
+
+  final String leagueId;
+  final String leagueSlug;
+  final String leagueName;
+  final int activeMemberCount;
+}
+
 /// Motivi di segnalazione predefiniti, in ordine di comparsa nel dialog di
 /// "Segnala utente" (player_profile_page.dart). I codici (non le etichette)
 /// sono anche il contratto col database: coincidono esattamente con
