@@ -160,6 +160,57 @@ class KicklyRepository {
     }
   }
 
+  /// Leghe che oggi impedirebbero la cancellazione dell'account: il
+  /// chiamante ne è owner e ci sono altri membri attivi oltre a lui. La UI
+  /// la interroga prima di mostrare la conferma di eliminazione, così può
+  /// mostrare subito la schermata "risolvi prima di continuare" invece di
+  /// far scoprire il blocco solo dopo un tentativo fallito.
+  Future<List<AccountDeletionBlocker>> getAccountDeletionBlockers() async {
+    if (isDemo) return const [];
+    final data = await client!.rpc('get_account_deletion_blockers');
+    return (data as List<dynamic>? ?? const [])
+        .map(
+          (raw) => AccountDeletionBlocker.fromMap(
+            Map<String, dynamic>.from(raw as Map),
+          ),
+        )
+        .toList();
+  }
+
+  /// Cancella l'account: prima la RPC che anonimizza il profilo (fallisce
+  /// con `account_has_blocking_leagues` se ci sono leghe da risolvere),
+  /// poi la Edge Function che banna l'account e revoca le sue sessioni —
+  /// operazione non raggiungibile da SQL. Se la RPC fallisce con
+  /// `account_already_deleted` (profilo gia' anonimizzato da un tentativo
+  /// precedente la cui chiamata alla Edge Function non era andata a buon
+  /// fine) si prosegue comunque: e' il modo per completare un retry, vedi il
+  /// commento nel corpo del metodo. Il chiamante deve poi fare il signOut
+  /// locale: questo metodo si occupa solo delle due chiamate di rete, non
+  /// della sessione locale (stessa separazione già usata altrove fra
+  /// repository e AppState).
+  Future<void> deleteAccount() async {
+    if (isDemo) return;
+    try {
+      await client!.rpc('request_account_deletion');
+    } catch (error) {
+      // Se un tentativo precedente aveva gia' anonimizzato il profilo ma poi
+      // la invoke() sotto era fallita (es. un blip di rete), la RPC qui sopra
+      // fallisce subito con account_already_deleted perche' quel controllo e'
+      // la prima cosa che fa request_account_deletion() (vedi
+      // supabase/migrations/20260821090000_account_deletion.sql). Senza
+      // questo controllo l'utente resterebbe bloccato: il profilo e' gia'
+      // anonimizzato quindi ogni retry ripete lo stesso errore, e non c'e'
+      // altro modo lato client per arrivare a bannare l'account. Trattarlo
+      // come "anonimizzazione gia' fatta" e proseguire e' sicuro: la RPC e'
+      // pura anonimizzazione dati, non ha effetti da rieseguire. Qualunque
+      // altro errore (account_has_blocking_leagues, rete, ecc.) deve invece
+      // continuare a propagarsi normalmente, stesso idioma di
+      // friendlyError() in core/widgets/common.dart.
+      if (!error.toString().contains('account_already_deleted')) rethrow;
+    }
+    await client!.functions.invoke('delete-account');
+  }
+
   Future<void> updatePassword(String password) async {
     if (isDemo) return;
     await client!.auth.updateUser(UserAttributes(password: password));
@@ -1633,6 +1684,53 @@ class KicklyRepository {
           .map((e) => (e as Map)['result'].toString())
           .toList(),
     );
+  }
+
+  /// Segnala un utente a chi amministra il progetto.
+  ///
+  /// Nessuna coda di moderazione in-app (vedi "Non-obiettivi" della spec di
+  /// sicurezza): la riga finisce in `user_reports`, leggibile solo da SQL/
+  /// dashboard Supabase (nessuna policy SELECT per `authenticated`), quindi
+  /// un insert riuscito senza eccezioni e' l'unica conferma che serve alla UI.
+  Future<void> reportUser({
+    required String reportedUserId,
+    String? leagueId,
+    required String reason,
+    String? details,
+  }) async {
+    if (isDemo) return;
+    final trimmedDetails = details?.trim();
+    await client!.from('user_reports').insert({
+      'reporter_id': currentUserId,
+      'reported_user_id': reportedUserId,
+      'league_id': leagueId,
+      'reason': reason,
+      'details': trimmedDetails == null || trimmedDetails.isEmpty
+          ? null
+          : trimmedDetails,
+    });
+  }
+
+  /// Blocca un utente: da questo momento nessuno dei due vede piu' il
+  /// profilo dell'altro nella lega condivisa (filtro lato RLS, vedi
+  /// `private.is_blocked_pair` in
+  /// 20260821090100_block_visibility_filter.sql), e sparisce dalle liste
+  /// membri/classifica di entrambi (20260821090200_league_lists_hide_blocked_users.sql).
+  ///
+  /// `upsert` con `ignoreDuplicates` invece di `insert` semplice: bloccare
+  /// due volte lo stesso utente (doppio tap, retry di rete) non deve far
+  /// fallire la seconda chiamata con una violazione di chiave primaria — il
+  /// risultato desiderato ("e' bloccato") e' gia' vero, quindi va trattato
+  /// come successo silenzioso, non come errore da mostrare all'utente.
+  Future<void> blockUser(String blockedUserId) async {
+    if (isDemo) return;
+    await client!
+        .from('user_blocks')
+        .upsert(
+          {'blocker_id': currentUserId, 'blocked_id': blockedUserId},
+          onConflict: 'blocker_id,blocked_id',
+          ignoreDuplicates: true,
+        );
   }
 
   Future<MatchPostGame> _loadPostGame(

@@ -204,6 +204,60 @@ String leagueRoleLabel(String role) => switch (role) {
   _ => role,
 };
 
+/// Una lega che blocca la cancellazione dell'account: il chiamante ne è
+/// owner e ci sono altri membri attivi oltre a lui. Forma restituita da
+/// `get_account_deletion_blockers()` (vedi
+/// supabase/migrations/20260821090000_account_deletion.sql).
+class AccountDeletionBlocker {
+  const AccountDeletionBlocker({
+    required this.leagueId,
+    required this.leagueSlug,
+    required this.leagueName,
+    required this.activeMemberCount,
+  });
+
+  factory AccountDeletionBlocker.fromMap(JsonMap map) => AccountDeletionBlocker(
+    leagueId: map['league_id'].toString(),
+    leagueSlug: map['league_slug']?.toString() ?? '',
+    leagueName: map['league_name']?.toString() ?? 'Lega Kickly',
+    activeMemberCount: asInt(map['active_member_count']),
+  );
+
+  final String leagueId;
+  final String leagueSlug;
+  final String leagueName;
+  final int activeMemberCount;
+}
+
+/// Motivi di segnalazione predefiniti, in ordine di comparsa nel dialog di
+/// "Segnala utente" (player_profile_page.dart). I codici (non le etichette)
+/// sono anche il contratto col database: coincidono esattamente con
+/// l'elenco del CHECK constraint user_reports_reason_check
+/// (20260821090000_report_and_block_tables.sql) — cambiarli qui senza
+/// aggiornare la migrazione fa fallire silenziosamente l'insert lato client
+/// (intercettato comunque da friendlyError, ma e' un disallineamento da
+/// evitare).
+const reportReasons = <String>[
+  'inappropriate_content',
+  'harassment',
+  'spam',
+  'fake_profile',
+  'other',
+];
+
+/// Etichetta italiana di un motivo di segnalazione. Un codice non
+/// riconosciuto torna cosi' com'e' invece di sparire: stesso contratto di
+/// leagueRoleLabel qui sopra, cosi' un disallineamento fra client e
+/// database resta visibile invece di mostrare un vuoto.
+String reportReasonLabel(String reason) => switch (reason) {
+  'inappropriate_content' => 'Contenuto inappropriato',
+  'harassment' => 'Comportamento offensivo o molestie',
+  'spam' => 'Spam o pubblicità',
+  'fake_profile' => 'Profilo falso',
+  'other' => 'Altro',
+  _ => reason,
+};
+
 class LeagueMember {
   const LeagueMember({
     required this.id,

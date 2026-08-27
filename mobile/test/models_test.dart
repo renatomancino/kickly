@@ -63,4 +63,18 @@ void main() {
 
     expect(match.isPast, isTrue);
   });
+
+  test('AccountDeletionBlocker.fromMap legge la forma restituita da get_account_deletion_blockers', () {
+    final blocker = AccountDeletionBlocker.fromMap({
+      'league_id': 'league-id',
+      'league_slug': 'calcetto-del-giovedi',
+      'league_name': 'Calcetto del giovedì',
+      'active_member_count': 8,
+    });
+
+    expect(blocker.leagueId, 'league-id');
+    expect(blocker.leagueSlug, 'calcetto-del-giovedi');
+    expect(blocker.leagueName, 'Calcetto del giovedì');
+    expect(blocker.activeMemberCount, 8);
+  });
 }
