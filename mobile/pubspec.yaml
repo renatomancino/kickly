@@ -52,7 +52,7 @@ dependencies:
   # Sign in with Google, flusso nativo con ID token verificato da Supabase.
   google_sign_in: 7.2.0
   # Sign in with Apple, obbligatorio su iOS se si offre un altro login social.
-  sign_in_with_apple: 8.1.0
+  sign_in_with_apple: 8.2.0
   # Hash del nonce nel flusso Apple (vedi kickly_repository.dart).
   crypto: 3.0.7
   # Lettura/scrittura degli eventi sul calendario di sistema (iOS e Android).
