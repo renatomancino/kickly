@@ -217,7 +217,7 @@ jobs:
       # Gradle 9.3.1 + AGP 9.1.0 + Kotlin 2.4.0 richiedono una JVM moderna, e 21 e' la LTS
       # allineata a quella usata in locale. Va tenuta >= 17 e coerente con l'ambiente di
       # sviluppo: un JDK diverso e' una fonte classica di "sul mio Mac compila".
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -544,7 +544,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Analizza le dipendenze introdotte dalla PR
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
@@ -583,7 +583,7 @@ jobs:
 
       # Stessa versione di package.json (devDependency "supabase"), per non
       # avere una CLI diversa in CI rispetto a quella usata in locale.
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: '2.114.0'
 
