@@ -36,13 +36,13 @@ dependencies:
   image_picker: 1.2.3
   http: 1.6.0
   intl: 0.20.3
-  supabase_flutter: 2.17.2
+  supabase_flutter: 2.18.0
   url_launcher: 6.3.2
   # Banner di sistema veri (non SnackBar) e canale notifiche Android brandizzato.
   flutter_local_notifications: 19.4.2
   # Task periodico che controlla le notifiche non lette ad app chiusa, così il
   # telefono avvisa anche senza un canale push FCM/APNs configurato.
-  workmanager: 0.10.9
+  workmanager: 0.10.10
   # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
   # che gira in un isolate separato senza accesso allo stato dell'app.
   shared_preferences: 2.5.5
@@ -52,7 +52,7 @@ dependencies:
   # Sign in with Google, flusso nativo con ID token verificato da Supabase.
   google_sign_in: 7.2.0
   # Sign in with Apple, obbligatorio su iOS se si offre un altro login social.
-  sign_in_with_apple: 8.1.0
+  sign_in_with_apple: 8.2.0
   # Hash del nonce nel flusso Apple (vedi kickly_repository.dart).
   crypto: 3.0.7
   # Lettura/scrittura degli eventi sul calendario di sistema (iOS e Android).
