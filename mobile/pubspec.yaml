@@ -33,28 +33,28 @@ dependencies:
   cached_network_image: 3.4.1
   cupertino_icons: 1.0.9
   go_router: 17.5.0
-  image_picker: 1.2.3
+  image_picker: 1.2.4
   http: 1.6.0
   intl: 0.20.3
-  supabase_flutter: 2.17.2
-  url_launcher: 6.3.2
+  supabase_flutter: 2.18.3
+  url_launcher: 6.3.3
   # Banner di sistema veri (non SnackBar) e canale notifiche Android brandizzato.
   flutter_local_notifications: 19.4.2
   # Task periodico che controlla le notifiche non lette ad app chiusa, così il
   # telefono avvisa anche senza un canale push FCM/APNs configurato.
-  workmanager: 0.10.9
+  workmanager: 0.10.10
   # Sessione Supabase e cursore dell'ultima notifica letti dal task in background,
   # che gira in un isolate separato senza accesso allo stato dell'app.
-  shared_preferences: 2.5.5
+  shared_preferences: 2.5.6
   # Keychain (iOS) / Keystore (Android) per i token di sessione Supabase: senza
   # questo finiscono in SharedPreferences/NSUserDefaults in chiaro.
   flutter_secure_storage: 10.3.1
   # Sign in with Google, flusso nativo con ID token verificato da Supabase.
   google_sign_in: 7.2.0
   # Sign in with Apple, obbligatorio su iOS se si offre un altro login social.
-  sign_in_with_apple: 8.1.0
+  sign_in_with_apple: 8.2.0
   # Hash del nonce nel flusso Apple (vedi kickly_repository.dart).
-  crypto: 3.0.7
+  crypto: 3.0.8
   # Lettura/scrittura degli eventi sul calendario di sistema (iOS e Android).
   # Resta pinnata alla 3.x: dalla 4.3.0 il pacchetto richiede `timezone ^0.9.0`,
   # mentre qui flutter_local_notifications porta già `timezone ^0.10.1`, quindi
@@ -64,7 +64,7 @@ dependencies:
   # (auth_page.dart): il logo è 4 path a colori diversi, troppo per un'icona
   # Material o un CustomPainter scritto a mano senza rischiare di sbagliare le
   # curve.
-  flutter_svg: 2.3.0
+  flutter_svg: 2.3.2
 
 # Copia vendorizzata di device_calendar 3.9.0: il lato Android del pacchetto
 # pubblicato NON è utilizzabile con Flutter/AGP attuali, per due motivi
